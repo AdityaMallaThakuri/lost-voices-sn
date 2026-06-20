@@ -3,11 +3,18 @@ data/raw/suzBl_usfm.zip
 data/raw/suzBl_readaloud.zip
 data/raw/supplementary/
 
-# Large model checkpoints
-models/
-*.bin
-*.pt
-*.ckpt
+# Large model files
+models/*.bin
+models/*.pt
+models/*.vec
+models/*.npy
+models/tts_checkpoints/
+
+# Gensim fastText auxiliary files
+*.wv.vectors_ngrams.npy
+*.wv.vectors_vocab.npy
+*.trainables.syn1neg.npy
+
 
 # Python
 __pycache__/
@@ -19,3 +26,6 @@ __pycache__/
 .DS_Store
 *.log
 wandb/
+
+
+*.vec
