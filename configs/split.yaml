@@ -1,0 +1,4 @@
+input_path: data/raw/sunuwar_nt_raw.txt
+train_path: data/processed/train.txt
+test_path:  data/processed/test.txt
+test_ratio: 0.10

@@ -59,7 +59,7 @@ lost-voices-sunuwar/
 - **Content:** Full Sunuwar Bible, 66 books (OT + NT), USFM format
 - **Licence:** CC BY-NC-ND 4.0, © 2011 Wycliffe Bible Translators, Inc.
 - **Use:** Non-commercial academic research. Attribution required. No redistribution of raw text.
-- **For NLP:** Use NT books only (27 books, ~7,959 verses, ~200–220K tokens)
+- **For NLP:** Use NT books only (27 books, ~7,959 verses, 15,738 sentences, ~180K tokens after danda segmentation)
 - **OT books are bonus data** — use only if NT corpus proves too small for training
 
 ### TTS text source ( track)
@@ -183,7 +183,7 @@ Keeping them would pollute the corpus with non-Sunuwar tokens.
 - Architecture: BERT-style bidirectional encoder
 - Layers: 6, hidden: 256, heads: 8, FFN: 1024
 - Max sequence length: 128 tokens
-- Vocabulary: SentencePiece 8k model
+- Vocabulary: SentencePiece 8k model (effective vocab is 6,764 unique pieces)
 - Total parameters: ~15 million
 - Dropout: 0.1
 - Activation: GELU

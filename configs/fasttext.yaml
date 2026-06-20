@@ -1,0 +1,18 @@
+input_path: data/processed/train.txt
+eval_path: data/processed/test.txt
+model_dir: models/
+vector_size: 200
+window: 5
+min_count: 1
+minn: 3
+maxn: 5
+negative: 10
+epochs: 20
+seed: 42
+workers: 4
+probe_words:
+  - "परमप्रभु"
+  - "येसु"
+  - "मुर"
+  - "रागी"
+  - "लोव़"

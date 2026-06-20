@@ -1,0 +1,14 @@
+{
+  "word2vec_sg": {
+    "oov_rate": 30.903,
+    "genre_f1_macro": 0.2498
+  },
+  "word2vec_cbow": {
+    "oov_rate": 30.903,
+    "genre_f1_macro": 0.2499
+  },
+  "fasttext": {
+    "oov_rate": 19.9103,
+    "genre_f1_macro": 0.2494
+  }
+}

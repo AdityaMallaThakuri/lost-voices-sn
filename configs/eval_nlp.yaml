@@ -1,0 +1,6 @@
+word2vec_sg_path: models/sunuwar_w2v_sg.model
+word2vec_cbow_path: models/sunuwar_w2v_cbow.model
+fasttext_path: models/sunuwar_fasttext.bin
+train_path: data/processed/train.txt
+test_path: data/processed/test.txt
+output_path: results/embedding_eval.json
