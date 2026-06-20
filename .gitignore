@@ -1,0 +1,21 @@
+# Raw data — CC BY-NC-ND 4.0, do not redistribute
+data/raw/suzBl_usfm.zip
+data/raw/suzBl_readaloud.zip
+data/raw/supplementary/
+
+# Large model checkpoints
+models/
+*.bin
+*.pt
+*.ckpt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Misc
+.DS_Store
+*.log
+wandb/

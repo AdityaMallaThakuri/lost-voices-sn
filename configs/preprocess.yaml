@@ -1,0 +1,37 @@
+zip_path: data/raw/suzBl_usfm.zip
+output_path: data/raw/sunuwar_nt_raw.txt
+min_tokens: 3
+max_foreign_ratio: 0.20
+devanagari_range_start: "0x0900"
+devanagari_range_end: "0x097F"
+zwj_codepoint: "0x200D"
+danda: "0x0964"
+double_danda: "0x0965"
+nt_book_codes:
+  - MAT
+  - MRK
+  - LUK
+  - JHN
+  - ACT
+  - ROM
+  - 1CO
+  - 2CO
+  - GAL
+  - EPH
+  - PHP
+  - COL
+  - 1TH
+  - 2TH
+  - 1TI
+  - 2TI
+  - TIT
+  - PHM
+  - HEB
+  - JAS
+  - 1PE
+  - 2PE
+  - 1JN
+  - 2JN
+  - 3JN
+  - JUD
+  - REV
