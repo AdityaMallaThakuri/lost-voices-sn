@@ -1,0 +1,6 @@
+{
+  "spm_8k":  {"vocab_size": 8000,  "fertility": 1.3612, "unk_rate": 0.0},
+  "spm_16k": {"vocab_size": 16000, "fertility": 1.3612, "unk_rate": 0.0},
+  "effective_vocab_size": 6764,
+  "note": "Both models identical — corpus supports only 6764 unique subword pieces. Recommended: spm_8k."
+}

@@ -1,0 +1,18 @@
+{
+  "architecture": "SunuwarBERT-small",
+  "total_parameters": 14485568,
+  "best_val_perplexity": 14.79,
+  "best_epoch": 30,
+  "total_epochs_run": 35,
+  "early_stopped": true,
+  "final_train_loss": 1.9230,
+  "val_loss_at_best": 2.6939,
+  "random_baseline_perplexity": 8000,
+  "improvement_over_random": 540.9,
+  "perplexity_by_epoch": {
+    "1": 1226.74, "2": 373.26, "3": 293.84, "4": 173.76,
+    "5": 122.79, "6": 84.84, "7": 72.95, "8": 59.23,
+    "9": 46.87, "10": 39.13, "15": 26.99, "20": 20.46,
+    "25": 18.00, "28": 15.68, "30": 14.79, "35": 15.60
+  }
+}

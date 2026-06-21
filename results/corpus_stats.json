@@ -1,0 +1,11 @@
+{
+  "total_sentences": 15738,
+  "total_tokens": 179918,
+  "unique_word_types": 13124,
+  "type_token_ratio": 0.0729,
+  "mean_sentence_length": 11.43,
+  "median_sentence_length": 10.0,
+  "pct_devanagari_zwj": 97.92,
+  "train_sentences": 14164,
+  "test_sentences": 1574
+}
