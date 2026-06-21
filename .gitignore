@@ -33,9 +33,9 @@ wandb/
 
 
 
-# # Audio files — too large for GitHub
-# data/raw/audio/
-# data/processed/audio/
-# *.mp3
-# *.wav
-# *.mp4
+# Audio files — too large for GitHub; WAVs and pairs are generated outputs
+data/raw/audio/
+data/processed/audio/
+*.mp3
+*.wav
+*.mp4
