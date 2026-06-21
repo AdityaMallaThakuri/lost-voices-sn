@@ -113,7 +113,7 @@ def apply_mlm_mask(
 
     masked_ids[to_mask] = tokeniser.mask_id
     if to_random.any():
-        random_tokens = torch.randint(4, tokeniser.vocab_size, (to_random.sum().item(),))
+        random_tokens = torch.randint(4, tokeniser.vocab_size, (to_random.sum().item(),), device=input_ids.device)
         masked_ids[to_random] = random_tokens
 
     # Attention mask: 1 for real tokens, 0 for padding
