@@ -1,0 +1,41 @@
+# Data
+train_path: data/processed/train.txt
+test_path: data/processed/test.txt
+tokeniser_path: models/sunuwar_spm_8k.model
+
+# Model architecture
+num_layers: 6
+hidden_dim: 384
+num_heads: 8
+ffn_dim: 1024
+max_seq_len: 128
+vocab_size: 8000
+dropout: 0.1
+activation: gelu
+
+# Training
+seed: 42
+epochs: 100
+batch_size: 32
+grad_accumulation_steps: 4
+learning_rate: 0.0005
+weight_decay: 0.01
+warmup_ratio: 0.1
+fp16: true
+
+# MLM
+mlm_probability: 0.15
+mask_ratio: 0.8
+random_ratio: 0.1
+unchanged_ratio: 0.1
+
+# Early stopping
+early_stopping_patience: 5
+monitor_metric: val_perplexity
+
+# Output
+checkpoint_path: models/sunuwar_transformer.pt
+
+# Wandb
+wandb_project: lost-voices-sunuwar
+wandb_run_name: sunuwarBERT-small-v1
