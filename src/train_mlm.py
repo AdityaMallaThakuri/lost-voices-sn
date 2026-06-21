@@ -339,7 +339,7 @@ def main():
         num_training_steps=total_steps,
     )
 
-    scaler = torch.cuda.amp.GradScaler(enabled=config.get("fp16", False))
+    scaler = torch.amp.GradScaler('cuda', enabled=config.get("fp16", False))
 
     with open(config["test_path"], encoding="utf-8") as f:
         probe_sentences = [f.readline().strip() for _ in range(3)]

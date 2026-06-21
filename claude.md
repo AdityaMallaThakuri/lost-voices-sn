@@ -250,8 +250,8 @@ Keeping them would pollute the corpus with non-Sunuwar tokens.
 | Week 1 | preprocess_text.py | 🔲 Todo — next task |
 | Week 1 | preprocess_audio.py | 🔲 Todo —  |
 | Week 2 | SentencePiece tokeniser | 🔲 Todo |
-| Week 3 | word2vec + fastText | 🔲 Todo |
-| Week 4 | SunuwarBERT-small | 🔲 Todo |
+| Week 3 | word2vec + fastText | ✅ Done |
+| Week 4 | SunuwarBERT-small | 🔄 In progress |
 | Week 5 | MFA alignment | 🔲 Todo —  |
 | Week 6 | MMS TTS fine-tuning | 🔲 Todo —  |
 | Week 7–8 | Evaluation + report + release | 🔲 Todo |
