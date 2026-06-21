@@ -47,3 +47,4 @@ book_map:
   B25: {ebible: "094", code: 3JN, chapters: 1,  name: 3John}
   B26: {ebible: "095", code: JUD, chapters: 1,  name: Jude}
   B27: {ebible: "096", code: REV, chapters: 22, name: Revelation}
+

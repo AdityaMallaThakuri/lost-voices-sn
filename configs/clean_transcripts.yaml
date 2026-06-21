@@ -1,0 +1,2 @@
+input_dir: data/processed/audio/pairs
+output_dir: data/processed/audio/mfa_input

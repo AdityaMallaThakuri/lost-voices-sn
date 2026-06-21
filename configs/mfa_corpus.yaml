@@ -1,0 +1,6 @@
+wav_dir: data/processed/audio/wav
+text_dir: data/processed/audio/mfa_input
+corpus_dir: data/processed/audio/mfa_corpus
+pilot_book: MRK
+pilot_chapters: 16
+chunk_dir: data/processed/audio/mfa_corpus_chunked
