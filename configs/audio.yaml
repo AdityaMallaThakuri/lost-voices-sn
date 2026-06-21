@@ -1,0 +1,49 @@
+# Input
+mp3_dir: D:/SUZWBTN1DA/Sunuwar_suz_WBT_NT_Non-Drama
+readaloud_zip: data/raw/suzBl_readaloud.zip
+
+# Output
+wav_dir: data/processed/audio/wav
+pairs_dir: data/processed/audio/pairs
+
+# Audio settings
+sample_rate: 16000
+channels: 1
+loudness_target: -23.0
+silence_threshold_db: -40
+min_silence_ms: 1000
+
+# Pilot mode — process one book only
+pilot_only: false
+pilot_book: B02
+
+# Book mapping (MP3 book prefix → readaloud zip ebible number and code)
+# ebible numbers match the readaloud zip (070–096), not USFM book numbering
+book_map:
+  B01: {ebible: "070", code: MAT, chapters: 28, name: Matthew}
+  B02: {ebible: "071", code: MRK, chapters: 16, name: Mark}
+  B03: {ebible: "072", code: LUK, chapters: 24, name: Luke}
+  B04: {ebible: "073", code: JHN, chapters: 21, name: John}
+  B05: {ebible: "074", code: ACT, chapters: 28, name: Acts}
+  B06: {ebible: "075", code: ROM, chapters: 16, name: Romans}
+  B07: {ebible: "076", code: 1CO, chapters: 16, name: 1Corinthians}
+  B08: {ebible: "077", code: 2CO, chapters: 13, name: 2Corinthians}
+  B09: {ebible: "078", code: GAL, chapters: 6,  name: Galatians}
+  B10: {ebible: "079", code: EPH, chapters: 6,  name: Ephesians}
+  B11: {ebible: "080", code: PHP, chapters: 4,  name: Philippians}
+  B12: {ebible: "081", code: COL, chapters: 4,  name: Colossians}
+  B13: {ebible: "082", code: 1TH, chapters: 5,  name: 1Thessalonians}
+  B14: {ebible: "083", code: 2TH, chapters: 3,  name: 2Thessalonians}
+  B15: {ebible: "084", code: 1TI, chapters: 6,  name: 1Timothy}
+  B16: {ebible: "085", code: 2TI, chapters: 4,  name: 2Timothy}
+  B17: {ebible: "086", code: TIT, chapters: 3,  name: Titus}
+  B18: {ebible: "087", code: PHM, chapters: 1,  name: Philemon}
+  B19: {ebible: "088", code: HEB, chapters: 13, name: Hebrews}
+  B20: {ebible: "089", code: JAS, chapters: 5,  name: James}
+  B21: {ebible: "090", code: 1PE, chapters: 5,  name: 1Peter}
+  B22: {ebible: "091", code: 2PE, chapters: 3,  name: 2Peter}
+  B23: {ebible: "092", code: 1JN, chapters: 5,  name: 1John}
+  B24: {ebible: "093", code: 2JN, chapters: 1,  name: 2John}
+  B25: {ebible: "094", code: 3JN, chapters: 1,  name: 3John}
+  B26: {ebible: "095", code: JUD, chapters: 1,  name: Jude}
+  B27: {ebible: "096", code: REV, chapters: 22, name: Revelation}

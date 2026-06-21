@@ -29,3 +29,13 @@ wandb/
 
 
 *.vec
+
+
+
+
+# # Audio files — too large for GitHub
+# data/raw/audio/
+# data/processed/audio/
+# *.mp3
+# *.wav
+# *.mp4
