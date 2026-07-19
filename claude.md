@@ -202,6 +202,66 @@ Keeping them would pollute the corpus with non-Sunuwar tokens.
 
 ---
 
+## TTS roadmap (revised plan, decided 2026-07-19)
+
+Superseding the naive "chunk → align → done" approach used for the Week 5 Mark pilot.
+Informed by arXiv:2410.14197 (Unified Framework for Collecting TTS Datasets for 22
+Indian Languages) adapted for a **fixed, pre-recorded, single-narrator corpus** — we
+cannot record new audio, so corpus-balancing/recording-protocol parts of that paper
+don't apply; the coverage/QC/G2P parts do.
+
+### Key facts established
+- Full 27-book NT audio: **260 chapters, 29.5 hours, single narrator**, zero degenerate
+  (<5s) files. This is enough for solid single-speaker TTS — do not settle for the
+  16-chapter Mark pilot as the final training set.
+- Week 5 pilot alignment (233/288 chunks, 81%) used a flawed method: chunks were
+  split by silence *before* alignment, and each chunk's text was **guessed** by
+  proportionally slicing chapter words by duration fraction (assumes constant
+  speaking rate — false). This is the likely root cause of the 19% failures, and
+  possibly of silent wrong-text-but-plausible-score chunks among the "successes."
+- `mfa_dict.dict` currently maps words to **individual Devanagari characters** as
+  "phones" — not real phonology. Conjuncts, matras, and ZWJ clusters need proper
+  G2P treatment, not char-splitting.
+- Sunuwar (`suz`) has no existing MMS-TTS checkpoint. Plan: transfer-learn from
+  `facebook/mms-tts-nep` (Nepali, same script) rather than random init.
+- Whisper cannot transcribe Sunuwar — WER-vs-Whisper (the CLAUDE.md eval target) is
+  not a trustworthy intelligibility metric on its own. Treat it as secondary/exploratory
+  only; real evaluation needs a Sunuwar speaker's judgment.
+
+### Phases (do in order — each depends on the previous)
+1. **G2P / phoneme dictionary** — replace character-splitting in `mfa_dict.dict`
+   with real Sunuwar phoneme units (syllabify consonant+matra clusters, treat
+   ZWJ-linked conjuncts as single phones).
+2. **Rewrite alignment as align-then-segment, not segment-then-align** — feed MFA
+   the whole chapter WAV + whole chapter transcript together (MFA handles long-form
+   alignment fine; the 30s limit is a chunk-training constraint, not an alignment
+   input limit). Get word-level timestamps for the full chapter, *then* cut into
+   15–25s TTS segments at those aligned boundaries — text per segment is now exact,
+   not guessed. Apply to all 27 books (29.5h), retrain the MFA acoustic model on the
+   full corpus instead of the 16-chapter pilot.
+3. **QC filtering with explicit thresholds** — use `overall_log_likelihood`,
+   `phone_duration_deviation`, `snr` (already computed per chunk) to drop bad
+   segments, not just binary align-succeeded/failed.
+4. **Build `data/processed/tts_dataset/metadata.csv`** from QC-passed segments.
+   Hold out whole chapters (not random chunks) for validation to avoid near-duplicate
+   scriptural phrasing leaking train→val.
+5. **Fine-tune from `facebook/mms-tts-nep`**, not from scratch — cross-lingual
+   transfer converges faster and sounds more natural on limited single-speaker data
+   than training a VITS model cold. May need Devanagari/ZWJ token remapping.
+6. **Evaluate honestly** — MFA self-alignment-confidence of resynthesized audio as
+   a cheap automatic signal; real naturalness/intelligibility judgment needs an
+   actual Sunuwar speaker (community review), not just Whisper-WER.
+7. **Phoneme coverage report** (from phase 1's real phoneme inventory) — diagnostic
+   only, since we can't record more to patch gaps; document weak phonemes as a
+   known limitation, and as a scoped future-work item (community-recorded
+   supplementary set targeting specifically those gaps).
+
+Currently on: **Phase 1 not yet started.** Do not skip ahead to Phase 5 (TTS
+fine-tuning) before Phases 1–4 are done — training on the current pilot data would
+bake in the proportional-guess alignment errors.
+
+---
+
 ## Evaluation targets
 
 | Model | Metric | Target |
@@ -245,18 +305,21 @@ Keeping them would pollute the corpus with non-Sunuwar tokens.
 | Week | Task | Status |
 |------|------|--------|
 | Day 0 | eBible data confirmed and downloaded | ✅ Done |
-| Day 0 | BibleBrain API key requested | 🔲  pending |
-| Week 1 | GitHub repo created | 🔲 Todo |
-| Week 1 | preprocess_text.py | 🔲 Todo — next task |
-| Week 1 | preprocess_audio.py | 🔲 Todo —  |
-| Week 2 | SentencePiece tokeniser | 🔲 Todo |
-| Week 3 | word2vec + fastText | ✅ Done |
+| Day 0 | BibleBrain API key requested | 🔲 pending |
+| Week 1 | GitHub repo created | ✅ Done |
+| Week 1 | preprocess_text.py | ✅ Done — 15,738 sentences, 179,918 tokens, 13,124 types |
+| Week 1 | preprocess_audio.py | ✅ Done — full 27-book NT, 260 chapters, 29.5h, single narrator |
+| Week 2 | SentencePiece tokeniser | ✅ Done — 8k + 16k unigram models |
+| Week 3 | word2vec + fastText | ✅ Done — fastText OOV 19.9%, word2vec 30.9% |
 | Week 4 | SunuwarBERT-small pre-training | ✅ Done — val_perplexity 14.79 epoch 30 |
-| Week 5 | MFA alignment | 🔲 Todo —  |
-| Week 6 | MMS TTS fine-tuning | 🔲 Todo —  |
-| Week 7–8 | Evaluation + report + release | 🔲 Todo |
+| Week 5a | MFA alignment — Mark pilot (16 ch) | ✅ Done but flawed — 233/288 (81%), superseded by TTS roadmap Phase 1–2 above |
+| Week 5b | Phoneme G2P dictionary (roadmap Phase 1) | 🔲 Todo — next task |
+| Week 5c | Full-corpus align-then-segment (roadmap Phase 2–4) | 🔲 Todo |
+| Week 6 | MMS TTS fine-tuning from mms-tts-nep (roadmap Phase 5) | 🔲 Todo |
+| Week 7–8 | Evaluation (roadmap Phase 6–7) + report + release | 🔲 Todo |
 
-Update this table as tasks complete.
+Update this table as tasks complete. See "TTS roadmap" section above for the detailed
+Week 5–6 plan and why the original Mark-pilot alignment is being redone.
 
 ---
 
