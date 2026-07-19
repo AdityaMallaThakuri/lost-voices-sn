@@ -249,6 +249,29 @@ don't apply; the coverage/QC/G2P parts do.
   sampled chapters: resulting per-sentence segment durations are plausible (5-10s
   mean, only 1/670 segments under 1s). This is now `src/segment_from_pauses.py`.
 
+- **Full-corpus segmentation run completed** (2026-07-19): 260/260 chapters, zero
+  fallbacks, **13,192 segments** written to
+  `data/processed/audio/mfa_corpus_segments/speaker1/`, total duration recovered
+  29.50h (exact match to source — no audio lost). Mean/median duration 8.1s/6.8s.
+  912 segments (6.9%) flagged low-confidence (duration outlier). Report at
+  `data/processed/audio/segmentation_report.csv`.
+- **Disk space blocker found, not yet fixed**: MFA's default temp directory is
+  `C:\Users\ASUS\Documents\MFA`, and **C: only has 5.5GB free**. The pilot's temp
+  usage was 631MB for 288 segments/1.8h audio; scaling to 13,192 segments/29.5h
+  could plausibly need 10-30GB. Must pass `--temporary_directory` pointed at D:
+  (152GB free) before running Phase 3 training, or it will likely fail partway
+  through a multi-hour run from running out of disk.
+- **Phase 3 is not model training** — it's a data-verification step. MFA's
+  "acoustic model" here is a disposable Kaldi tool that only produces alignment
+  timestamps/confidence scores to validate Phase 2's segmentation guesses; it is
+  never used as, or related to, the actual Sunuwar TTS model (that's Phase 6,
+  fine-tuning `facebook/mms-tts-nep`). Don't conflate the two when resuming.
+- **Phase 3 time/resource expectation**: no GPU needed (Kaldi/CPU). RAM: keep
+  `num_jobs` at 3-4 given 7.7GB usable. Time: pilot's 288-segment/1.8h run took
+  ~92 min locally; this run is 13,192 segments/29.5h (16-46x more depending on
+  which dimension dominates scaling) — realistically many hours, possibly most of
+  a day. Plan to run in the background/overnight, not expect a quick turnaround.
+
 ### Phases (do in order — each depends on the previous)
 1. **G2P / phoneme dictionary** — ✅ done. `src/g2p.py` + `configs/g2p_sunuwar.yaml`,
    deterministic akshara-segmentation, real ~50-phone inventory, 98.9% coverage of
@@ -284,15 +307,21 @@ don't apply; the coverage/QC/G2P parts do.
    known limitation, and as a scoped future-work item (community-recorded
    supplementary set targeting specifically those gaps).
 
-Currently on: **Phase 2, in progress.** `src/segment_from_pauses.py` has been run
-against the full 260-chapter corpus locally (background job) — check
-`data/processed/audio/segmentation_report.csv` for the outcome (total segments,
-low-confidence %, duration stats) when resuming. Next concrete step after that:
-run `src/align.py` with `configs/align_train.yaml` (pointed at the new
-`mfa_corpus_segments` corpus instead of the old pilot's `mfa_corpus`/`mfa_corpus_chunked`)
-using the `aligner` conda env locally (`conda run -n aligner mfa train ...` or
-activate the env first) — not Colab. Do not skip ahead to Phase 6 (TTS fine-tuning)
-before Phases 2-5 are done.
+Currently on: **Phase 2 done, Phase 3 not started yet — paused here.** Segmentation
+results already confirmed good (see "Full-corpus segmentation run completed" above).
+Next concrete steps to resume, in order:
+1. Fix `configs/align_train.yaml`: `corpus_dir` still points at the old
+   `mfa_corpus_full` (whole chapters — the one that failed 0/16). Repoint it at
+   `data/processed/audio/mfa_corpus_segments`.
+2. Add `--temporary_directory` pointed at a D: path to the `mfa train` command in
+   `src/align.py` (or config) — **do not skip this**, C: only has 5.5GB free and
+   will likely run out of space partway through otherwise.
+3. Run via the local `aligner` conda env (`conda run -n aligner mfa train ...` or
+   activate the env first) — not Colab, MFA already works locally.
+4. Expect a long run (many hours) — start it and let it run in the background,
+   don't wait on it live.
+
+Do not skip ahead to Phase 6 (TTS fine-tuning) before Phases 3-5 are done.
 
 ---
 
