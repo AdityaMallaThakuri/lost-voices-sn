@@ -1,6 +1,36 @@
 wav_dir: data/processed/audio/wav
 text_dir: data/processed/audio/mfa_input
-corpus_dir: data/processed/audio/mfa_corpus
-pilot_book: MRK
-pilot_chapters: 16
-chunk_dir: data/processed/audio/mfa_corpus_chunked
+corpus_dir: data/processed/audio/mfa_corpus_full
+
+# Full 27-book NT — chapter counts from configs/audio.yaml's book_map.
+# Chapter-level utterances (whole chapters, not pre-chunked): alignment
+# runs on full chapters, segmentation into TTS-length clips happens
+# afterwards from the resulting word-level TextGrids.
+book_map:
+  MAT: 28
+  MRK: 16
+  LUK: 24
+  JHN: 21
+  ACT: 28
+  ROM: 16
+  1CO: 16
+  2CO: 13
+  GAL: 6
+  EPH: 6
+  PHP: 4
+  COL: 4
+  1TH: 5
+  2TH: 3
+  1TI: 6
+  2TI: 4
+  TIT: 3
+  PHM: 1
+  HEB: 13
+  JAS: 5
+  1PE: 5
+  2PE: 3
+  1JN: 5
+  2JN: 1
+  3JN: 1
+  JUD: 1
+  REV: 22

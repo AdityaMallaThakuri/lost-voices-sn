@@ -1,0 +1,11 @@
+mode: train
+
+corpus_dir: data/processed/audio/mfa_corpus_full
+dictionary_path: data/processed/audio/mfa_dict.dict
+output_model_path: models/sunuwar_acoustic_model.zip
+output_textgrid_dir: data/processed/audio/textgrids_chapters
+
+# Colab CPU runtime — keep this modest to avoid RAM pressure. Raise if
+# running somewhere with more RAM headroom.
+num_jobs: 4
+clean: true
