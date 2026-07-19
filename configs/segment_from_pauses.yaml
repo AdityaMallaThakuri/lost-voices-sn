@@ -1,0 +1,15 @@
+wav_dir: data/processed/audio/wav
+text_dir: data/processed/audio/mfa_input
+output_corpus_dir: data/processed/audio/mfa_corpus_segments
+report_path: data/processed/audio/segmentation_report.csv
+
+# Permissive silence detection — deliberately over-detects pauses (including
+# minor mid-sentence breaths); the real sentence boundaries are then picked
+# out by ranking candidates by duration, not by this threshold alone.
+min_silence_len_ms: 200
+silence_thresh_db: -40
+
+# Segments outside this range are flagged low-confidence, not discarded —
+# Phase 3 decides what to do with flagged segments.
+min_confident_duration_s: 1.5
+max_confident_duration_s: 20.0

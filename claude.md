@@ -217,48 +217,82 @@ don't apply; the coverage/QC/G2P parts do.
 - Week 5 pilot alignment (233/288 chunks, 81%) used a flawed method: chunks were
   split by silence *before* alignment, and each chunk's text was **guessed** by
   proportionally slicing chapter words by duration fraction (assumes constant
-  speaking rate — false). This is the likely root cause of the 19% failures, and
-  possibly of silent wrong-text-but-plausible-score chunks among the "successes."
-- `mfa_dict.dict` currently maps words to **individual Devanagari characters** as
-  "phones" — not real phonology. Conjuncts, matras, and ZWJ clusters need proper
-  G2P treatment, not char-splitting.
+  speaking rate — false).
+- `mfa_dict.dict` used to map words to **individual Devanagari characters** as
+  "phones" (fixed in Phase 1, see below).
 - Sunuwar (`suz`) has no existing MMS-TTS checkpoint. Plan: transfer-learn from
   `facebook/mms-tts-nep` (Nepali, same script) rather than random init.
 - Whisper cannot transcribe Sunuwar — WER-vs-Whisper (the CLAUDE.md eval target) is
   not a trustworthy intelligibility metric on its own. Treat it as secondary/exploratory
   only; real evaluation needs a Sunuwar speaker's judgment.
+- **MFA runs locally, not in Colab.** There's a working conda env `aligner` (MFA
+  3.3.9) on this machine already — confirmed via `~/Documents/MFA/command_history.yaml`,
+  which also shows the Mark pilot's successful run happened here, not on Colab (an
+  earlier session mistakenly believed otherwise). MFA doesn't use GPU (Kaldi/CPU-based),
+  so no Colab/GPU is needed for alignment — only for Phase 5's actual TTS fine-tuning.
+  Local machine: i5-11400H, 6c/12t, only 7.7GB RAM (the real local constraint — keep
+  `num_jobs` low, e.g. 3-4, to avoid swapping).
+- **Whole-chapter alignment fails completely, confirmed empirically.** An earlier
+  local attempt at feeding MFA whole chapters directly (`mfa train` on unchunked
+  `mfa_corpus`) has a log showing `Aligned 0, errors on 16, total 16` — 0% success.
+  Kaldi's Viterbi search doesn't scale to multi-minute utterances. This means
+  **pre-chunking before alignment is necessary, not the bug** — the bug was always
+  just the proportional-word-guessing used to assign text to each chunk. The
+  "align-then-segment on whole chapters" idea originally written into Phase 2 below
+  is wrong and was replaced (see revised Phase 2).
+- **Revised chunking method, validated empirically**: naive pause-count from silence
+  detection does NOT match sentence count (~2.67x more pauses than sentences, 0/40
+  sampled chapters within even a loose tolerance — narrators pause mid-sentence at
+  clause/breath boundaries, not just at the danda). Fix: detect all candidate pauses
+  permissively, then keep only the top `(sentence_count - 1)` *longest* pauses as the
+  real sentence boundaries, discarding the rest as breath noise. Validated on 15
+  sampled chapters: resulting per-sentence segment durations are plausible (5-10s
+  mean, only 1/670 segments under 1s). This is now `src/segment_from_pauses.py`.
 
 ### Phases (do in order — each depends on the previous)
-1. **G2P / phoneme dictionary** — replace character-splitting in `mfa_dict.dict`
-   with real Sunuwar phoneme units (syllabify consonant+matra clusters, treat
-   ZWJ-linked conjuncts as single phones).
-2. **Rewrite alignment as align-then-segment, not segment-then-align** — feed MFA
-   the whole chapter WAV + whole chapter transcript together (MFA handles long-form
-   alignment fine; the 30s limit is a chunk-training constraint, not an alignment
-   input limit). Get word-level timestamps for the full chapter, *then* cut into
-   15–25s TTS segments at those aligned boundaries — text per segment is now exact,
-   not guessed. Apply to all 27 books (29.5h), retrain the MFA acoustic model on the
-   full corpus instead of the 16-chapter pilot.
-3. **QC filtering with explicit thresholds** — use `overall_log_likelihood`,
-   `phone_duration_deviation`, `snr` (already computed per chunk) to drop bad
-   segments, not just binary align-succeeded/failed.
-4. **Build `data/processed/tts_dataset/metadata.csv`** from QC-passed segments.
-   Hold out whole chapters (not random chunks) for validation to avoid near-duplicate
-   scriptural phrasing leaking train→val.
-5. **Fine-tune from `facebook/mms-tts-nep`**, not from scratch — cross-lingual
+1. **G2P / phoneme dictionary** — ✅ done. `src/g2p.py` + `configs/g2p_sunuwar.yaml`,
+   deterministic akshara-segmentation, real ~50-phone inventory, 98.9% coverage of
+   the full 260-chapter vocab (9,602/9,711 tokens). See "Language facts" section for
+   phone table details. Committed.
+2. **Segment chapters into per-sentence clips with correct text** — ranked-silence-
+   boundary method (above), not align-then-segment (that failed) and not the old
+   proportional guess. `src/segment_from_pauses.py` + `configs/segment_from_pauses.yaml`,
+   writes to `data/processed/audio/mfa_corpus_segments/speaker1/`, flags
+   duration-outlier segments (<1.5s or >20s) as low-confidence rather than dropping
+   them silently, writes `data/processed/audio/segmentation_report.csv`.
+   `src/split_audio_chunks.py` is now superseded — do not use it going forward.
+3. **Align the segments with MFA** — `src/align.py` (train mode) on the full
+   corpus using the Phase 1 dictionary, producing the acoustic model + TextGrids.
+   Since text per segment is now correct (not guessed), this should perform far
+   better than the pilot's 81%.
+4. **QC filtering with explicit thresholds** — use MFA's own per-utterance
+   `overall_log_likelihood`, `phone_duration_deviation`, `snr` output (confirmed via
+   the pilot's `alignment_analysis.csv` — this is MFA's built-in output, no custom
+   script needed) plus the pre-alignment duration-outlier flag from step 2, to drop
+   bad segments before they become training data.
+5. **Build `data/processed/tts_dataset/metadata.csv`** from QC-passed segments.
+   Hold out whole chapters (not random segments) for validation to avoid
+   near-duplicate scriptural phrasing leaking train→val.
+6. **Fine-tune from `facebook/mms-tts-nep`**, not from scratch — cross-lingual
    transfer converges faster and sounds more natural on limited single-speaker data
    than training a VITS model cold. May need Devanagari/ZWJ token remapping.
-6. **Evaluate honestly** — MFA self-alignment-confidence of resynthesized audio as
+7. **Evaluate honestly** — MFA self-alignment-confidence of resynthesized audio as
    a cheap automatic signal; real naturalness/intelligibility judgment needs an
    actual Sunuwar speaker (community review), not just Whisper-WER.
-7. **Phoneme coverage report** (from phase 1's real phoneme inventory) — diagnostic
+8. **Phoneme coverage report** (from phase 1's real phoneme inventory) — diagnostic
    only, since we can't record more to patch gaps; document weak phonemes as a
    known limitation, and as a scoped future-work item (community-recorded
    supplementary set targeting specifically those gaps).
 
-Currently on: **Phase 1 not yet started.** Do not skip ahead to Phase 5 (TTS
-fine-tuning) before Phases 1–4 are done — training on the current pilot data would
-bake in the proportional-guess alignment errors.
+Currently on: **Phase 2, in progress.** `src/segment_from_pauses.py` has been run
+against the full 260-chapter corpus locally (background job) — check
+`data/processed/audio/segmentation_report.csv` for the outcome (total segments,
+low-confidence %, duration stats) when resuming. Next concrete step after that:
+run `src/align.py` with `configs/align_train.yaml` (pointed at the new
+`mfa_corpus_segments` corpus instead of the old pilot's `mfa_corpus`/`mfa_corpus_chunked`)
+using the `aligner` conda env locally (`conda run -n aligner mfa train ...` or
+activate the env first) — not Colab. Do not skip ahead to Phase 6 (TTS fine-tuning)
+before Phases 2-5 are done.
 
 ---
 
@@ -312,11 +346,13 @@ bake in the proportional-guess alignment errors.
 | Week 2 | SentencePiece tokeniser | ✅ Done — 8k + 16k unigram models |
 | Week 3 | word2vec + fastText | ✅ Done — fastText OOV 19.9%, word2vec 30.9% |
 | Week 4 | SunuwarBERT-small pre-training | ✅ Done — val_perplexity 14.79 epoch 30 |
-| Week 5a | MFA alignment — Mark pilot (16 ch) | ✅ Done but flawed — 233/288 (81%), superseded by TTS roadmap Phase 1–2 above |
-| Week 5b | Phoneme G2P dictionary (roadmap Phase 1) | 🔲 Todo — next task |
-| Week 5c | Full-corpus align-then-segment (roadmap Phase 2–4) | 🔲 Todo |
-| Week 6 | MMS TTS fine-tuning from mms-tts-nep (roadmap Phase 5) | 🔲 Todo |
-| Week 7–8 | Evaluation (roadmap Phase 6–7) + report + release | 🔲 Todo |
+| Week 5a | MFA alignment — Mark pilot (16 ch) | ✅ Done but flawed — 233/288 (81%), superseded below |
+| Week 5b | Phoneme G2P dictionary (roadmap Phase 1) | ✅ Done — 98.9% coverage, ~50-phone inventory |
+| Week 5c | Segment chapters into per-sentence clips (roadmap Phase 2) | 🔄 In progress — ran full 260-chapter pass locally, check `segmentation_report.csv` |
+| Week 5d | Align segments with MFA (roadmap Phase 3) | 🔲 Todo — next task, run locally via `aligner` conda env, not Colab |
+| Week 5e | QC filtering + build tts_dataset/metadata.csv (roadmap Phase 4–5) | 🔲 Todo |
+| Week 6 | MMS TTS fine-tuning from mms-tts-nep (roadmap Phase 6) | 🔲 Todo |
+| Week 7–8 | Evaluation (roadmap Phase 7–8) + report + release | 🔲 Todo |
 
 Update this table as tasks complete. See "TTS roadmap" section above for the detailed
 Week 5–6 plan and why the original Mark-pilot alignment is being redone.

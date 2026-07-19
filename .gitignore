@@ -41,3 +41,6 @@ data/processed/audio/
 *.mp4
 
 SUZWBTN1DA/
+
+# Local scratch for moving data to Colab/Drive — never meant for git
+_colab_transfer/
