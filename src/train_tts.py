@@ -197,10 +197,13 @@ def build_training_json(cfg: dict, dataset_dir: Path, out_path: Path) -> dict:
         "output_dir": cfg["output_dir"],
         "overwrite_output_dir": True,
 
-        # audiofolder gives us train/ and validation/ splits for free
-        "dataset_name": "audiofolder",
+        # The trainer has no `data_dir` field (verified by introspecting its
+        # dataclasses), so the local directory goes straight into
+        # `dataset_name`: load_dataset() on a path auto-detects the audiofolder
+        # layout and yields the train/ and validation/ splits by itself. This
+        # also keeps the licensed audio local — nothing is uploaded to the Hub.
+        "dataset_name": str(dataset_dir),
         "dataset_config_name": None,
-        "data_dir": str(dataset_dir),
         "audio_column_name": "audio",
         "text_column_name": "text",
         "train_split_name": "train",
@@ -232,6 +235,10 @@ def build_training_json(cfg: dict, dataset_dir: Path, out_path: Path) -> dict:
         "weight_kl": cfg.get("weight_kl", 1.5),
         "weight_duration": cfg.get("weight_duration", 1.0),
         "weight_mel": cfg.get("weight_mel", 35.0),
+
+        # Synthesised periodically during training so you can hear progress
+        # instead of only watching the loss.
+        "full_generation_sample_text": cfg.get("sample_text", ""),
 
         "logging_steps": cfg.get("logging_steps", 10),
         "eval_steps": cfg.get("eval_steps", 50),
