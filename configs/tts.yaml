@@ -61,6 +61,10 @@ weight_kl: 1.5
 weight_duration: 1.0
 weight_mel: 35.0
 
+# Synthesised periodically during training, so progress is audible and not
+# just a loss curve. A held-out LUK_005 sentence.
+sample_text: "परमप्रभु यावे आ दाक्‍शो पा"
+
 logging_steps: 10
 eval_steps: 50
 # Colab sessions die without warning and output_dir is on Drive, so save
