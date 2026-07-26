@@ -1,0 +1,12 @@
+mode: train
+
+corpus_dir: data/processed/audio/phase3_verification/batch3/mfa_corpus
+dictionary_path: data/processed/audio/mfa_dict.dict
+output_model_path: models/phase3_verification/batch3.zip
+output_textgrid_dir: data/processed/audio/phase3_verification/batch3/textgrids
+
+# Verification batch 3 of 3 (15-chapter sample plan): 1PE_002, REV_001,
+# REV_021 — 3 chapters, ~165 segments.
+num_jobs: 4
+clean: true
+temporary_directory: D:/mfa_temp_batch3

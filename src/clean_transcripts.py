@@ -16,14 +16,40 @@ DEVANAGARI = re.compile(r"[ऀ-ॿ‍\s]")
 
 # Cross-reference pattern: Devanagari/space chars followed by digits (Devanagari or ASCII),
 # a colon, then more digits.  Matches things like "उत्‍पत्ती २२:१८" or "मत्ती ३:१"
+#
+# The book-name class MUST include ZWJ (U+200D). Sunuwar book names are full of
+# conjuncts — "कोरिन्‍थी" has a ZWJ in the middle — and without it the match
+# started only *after* the ZWJ, so "१ कोरिन्‍थी १:१७" lost "थी १:१७" and left
+# the unspoken fragment "१कोरिन्‍" behind in the transcript. That fragment (and
+# bare verse numerals like "१७") is not in the audio and has no entry in the
+# G2P dictionary, so MFA saw it as OOV.
+#
+# The book-name run must also be *bounded*. The original `[ऀ-ॿ\s]+` was greedy
+# over whitespace, so it would happily swallow whole preceding sentences up to
+# the nearest "N:M"; ZWJ happened to break those runs early and accidentally
+# limited the damage. Now that ZWJ is allowed, the length has to be capped
+# explicitly: at most three name words, no digits inside them.
+# Devanagari letters and marks only: no digits (U+0966-096F) and — critically —
+# no danda/double-danda (U+0964-0965). Including the danda would let a book
+# name reach back across a sentence boundary and swallow the end of the
+# preceding sentence, which would also change the danda count Phase 2 uses to
+# decide how many segments a chapter has.
+_LETTER = r"[ऀ-ॣ॰-ॿ‍]"
+_REF = r"[०-९\d]+[:：][०-९\d]+"
+
 CROSS_REF = re.compile(
-    r"[ऀ-ॿ\s]+"          # book name (Devanagari words + spaces)
-    r"[०-९\d]+"          # chapter digits (Devanagari or ASCII)
-    r"[:：]"                        # colon separator
-    r"[०-९\d]+"          # verse digits
-    r"(?:[;,\s]*[ऀ-ॿ\s]*[०-९\d]+[:：][०-९\d]+)*"
-    # optional additional refs after semicolons
+    r"(?:[०-९\d]+[ ]+)?"          # optional book ordinal, e.g. the "१" of "१ कोरिन्‍थी"
+    rf"(?:{_LETTER}+[ ]+){{0,3}}"  # up to three book-name words
+    rf"{_REF}"                     # chapter:verse
+    rf"(?:[;,][ ]*(?:{_REF}|[०-९\d]+))*"   # ", १८" / "; ३:४" continuations
 )
+
+# Any token still carrying a Devanagari or ASCII digit after cross-reference
+# removal. The read-aloud source has no verse numbers in its running text, so
+# every such token is a mangled reference remnant, never spoken audio — and
+# none of them are in models/mfa_dict.dict, so leaving them in guarantees an
+# OOV at alignment time.
+DIGIT_TOKEN = re.compile(r"\S*[०-९\d]\S*")
 
 # Book-name line: 1–3 Devanagari words then a period (with optional trailing space)
 # e.g. "मत्ती." or "मर्कूस."
@@ -41,27 +67,32 @@ def is_skip_line(text: str) -> bool:
     return bool(BOOK_LINE.match(t) or CHAPTER_LINE.match(t))
 
 
-def clean_line(text: str) -> str:
+def clean_line(text: str) -> tuple[str, int]:
+    """Return (cleaned text, number of digit-remnant tokens dropped)."""
     # NFC normalise
     text = unicodedata.normalize("NFC", text)
     # Remove cross-references
     text = CROSS_REF.sub(" ", text)
     # Keep only Devanagari block, ZWJ, and whitespace
     text = "".join(ch if DEVANAGARI.match(ch) else " " for ch in text)
+    # Drop leftover numeral fragments the cross-reference pass didn't consume
+    dropped = len(DIGIT_TOKEN.findall(text))
+    text = DIGIT_TOKEN.sub(" ", text)
     # Collapse spaces
     text = MULTI_SPACE.sub(" ", text)
-    return text.strip()
+    return text.strip(), dropped
 
 
 def count_words(text: str) -> int:
     return len(text.split())
 
 
-def process_file(src: Path, dst_dir: Path) -> tuple[int, int]:
-    """Return (words_before, words_after)."""
+def process_file(src: Path, dst_dir: Path) -> tuple[int, int, int]:
+    """Return (words_before, words_after, digit_tokens_dropped)."""
     raw_lines = src.read_text(encoding="utf-8-sig").splitlines()
 
     before_words = 0
+    dropped_digits = 0
     cleaned_parts = []
 
     for raw in raw_lines:
@@ -74,7 +105,8 @@ def process_file(src: Path, dst_dir: Path) -> tuple[int, int]:
         if is_skip_line(text):
             continue
 
-        cleaned = clean_line(text)
+        cleaned, dropped = clean_line(text)
+        dropped_digits += dropped
         if cleaned:
             cleaned_parts.append(cleaned)
 
@@ -86,7 +118,7 @@ def process_file(src: Path, dst_dir: Path) -> tuple[int, int]:
     dst = dst_dir / src.name
     dst.write_text(result, encoding="utf-8")
 
-    return before_words, after_words
+    return before_words, after_words, dropped_digits
 
 
 def main(config_path: str) -> None:
@@ -102,20 +134,24 @@ def main(config_path: str) -> None:
 
     total_before = 0
     total_after = 0
+    total_digits = 0
     show_detail = 3  # print first N files verbosely
 
     for i, src in enumerate(files):
-        before, after = process_file(src, output_dir)
+        before, after, digits = process_file(src, output_dir)
         total_before += before
         total_after += after
+        total_digits += digits
         if i < show_detail:
-            print(f"{src.name}: {before} words -> {after} words")
+            print(f"{src.name}: {before} words -> {after} words "
+                  f"({digits} numeral remnants dropped)")
 
     print()
-    print(f"Total files : {len(files)}")
-    print(f"Words before: {total_before}")
-    print(f"Words after : {total_after}")
-    print(f"Reduction   : {100*(1 - total_after/total_before):.1f}%" if total_before else "")
+    print(f"Total files          : {len(files)}")
+    print(f"Words before         : {total_before}")
+    print(f"Words after          : {total_after}")
+    print(f"Numeral remnants cut : {total_digits}")
+    print(f"Reduction            : {100*(1 - total_after/total_before):.1f}%" if total_before else "")
 
 
 if __name__ == "__main__":
