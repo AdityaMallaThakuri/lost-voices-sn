@@ -1,0 +1,55 @@
+# Phase 4 — QC filtering of MFA-aligned segments.
+#
+# `analysis_csv` lives inside the MFA temporary directory each batch was run
+# with (see the matching configs/align_batch*.yaml). `sat_3_ali` is the final
+# speaker-adapted training stage, i.e. the best alignment MFA produced.
+
+segmentation_report: data/processed/audio/segmentation_report.csv
+output_report: results/qc_report.csv
+
+batches:
+  - name: batch0_1CO_pilot
+    analysis_csv: D:/mfa_temp_test/mfa_corpus_test/sat_3_ali/alignment_analysis.csv
+    textgrid_dir: data/processed/audio/phase3_verification/batch0_1CO_pilot/textgrids_test
+    corpus_dir: data/processed/audio/phase3_verification/batch0_1CO_pilot/mfa_corpus_test
+  - name: batch1
+    analysis_csv: D:/mfa_temp_batch1/mfa_corpus/sat_3_ali/alignment_analysis.csv
+    textgrid_dir: data/processed/audio/phase3_verification/batch1/textgrids
+    corpus_dir: data/processed/audio/phase3_verification/batch1/mfa_corpus
+  - name: batch3
+    analysis_csv: D:/mfa_temp_batch3/mfa_corpus/sat_3_ali/alignment_analysis.csv
+    textgrid_dir: data/processed/audio/phase3_verification/batch3/textgrids
+    corpus_dir: data/processed/audio/phase3_verification/batch3/mfa_corpus
+
+# Bounds are applied to the *trimmed* speech span, not the raw clip, since
+# that is what Phase 5 writes out. Set any threshold to null to disable it.
+thresholds:
+  min_duration_s: 1.5
+  max_duration_s: 20.0
+  min_words: 3
+
+  # MFA per-utterance acoustic scores. Values chosen from the observed
+  # distribution over the 567 aligned segments of batches 0/1/3 (see
+  # results/qc_report.csv): overall_log_likelihood p5 = -69.3, and
+  # phone_duration_deviation p95 = 9.0.
+  min_overall_log_likelihood: -70.0
+  max_phone_duration_deviation: 10.0
+
+  # MFA's snr estimate is not trustworthy on this corpus (median 0.57 dB on
+  # clean studio narration, range -18 to +26), so it is recorded but unused.
+  min_snr: null
+
+  # Leading/trailing silence is not a defect — Phase 5 trims to the speech
+  # span, so these are disabled rather than used as drop criteria.
+  max_leading_silence_s: null
+  max_trailing_silence_s: null
+
+  # This narrator pauses mid-sentence constantly (the Phase 2 finding that
+  # there are ~2.67x more pauses than sentences), so median internal silence
+  # is 1.27s and a 2s cut would discard a fifth of the corpus for normal
+  # speech. 3.5s is ~p96 — the genuinely anomalous tail.
+  max_internal_silence_s: 3.5
+
+  # The Phase 2 duration-outlier flag is advisory only — the acoustic scores
+  # above are a better signal, and many low-confidence segments align fine.
+  drop_low_confidence_segments: false

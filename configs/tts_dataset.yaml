@@ -1,0 +1,28 @@
+# Phase 5 — build the TTS training dataset from QC-passed segments.
+
+qc_report: results/qc_report.csv
+output_dir: data/processed/tts_dataset
+clean: true
+
+sample_rate: 16000    # asserted against the source wavs, not resampled
+trim_pad_s: 0.1       # keep 100ms either side of the MFA speech span
+min_words: 3          # re-checked after cleaning, not just before
+
+# Drop mangled cross-reference remnants ("१कोरिन्‍", bare verse numerals) that
+# the pre-fix clean_transcripts.py left in these segment transcripts. They are
+# not in the audio and not in the G2P dictionary. Once the full corpus is
+# re-segmented from the fixed mfa_input/ this becomes a no-op, but it is left
+# on as a safety net.
+strip_unspoken_numerals: true
+
+# Whole chapters are held out, never random segments — adjacent verses share
+# phrasing, so a random split leaks near-duplicates into validation.
+# For the current 12-chapter verification sample these two are held out
+# (one narrative Gospel chapter, one Revelation chapter — different books
+# and registers from each other and from the rest of the sample).
+# Comment this out and set `val_fraction` instead to pick chapters at random
+# (seeded, reproducible) once the full 260-chapter corpus is aligned.
+val_chapters:
+  - LUK_005
+  - REV_021
+# val_fraction: 0.1

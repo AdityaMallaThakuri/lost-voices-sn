@@ -307,6 +307,18 @@ don't apply; the coverage/QC/G2P parts do.
    known limitation, and as a scoped future-work item (community-recorded
    supplementary set targeting specifically those gaps).
 
+**Transcript bug found and fixed 2026-07-27**: `clean_transcripts.py`'s
+cross-reference regex omitted ZWJ from its book-name character class, so refs
+like "१ कोरिन्‍थी १:१७" were only partly consumed, leaving unspoken fragments
+("१कोरिन्‍", bare verse numerals) in the transcripts — 2,217 tokens across all
+260 chapters, and **none of them exist in `mfa_dict.dict`**, so every one was
+an OOV at alignment time. Likely a contributor to the 9–11% alignment failures.
+Fixed (ZWJ added, book-name run bounded to ≤3 words, danda excluded so a match
+can't cross a sentence boundary) and `mfa_input/` regenerated: 181,993 →
+180,255 tokens, 0 digit tokens. **`mfa_corpus_segments/` still holds the old
+dirty text** — re-run `segment_from_pauses.py` before the full Phase 3 run.
+Phase 5 strips the remnants as a safety net (`strip_unspoken_numerals`).
+
 Currently on: **Phase 2 done, Phase 3 not started yet — paused here.** Segmentation
 results already confirmed good (see "Full-corpus segmentation run completed" above).
 Next concrete steps to resume, in order:
@@ -378,9 +390,9 @@ Do not skip ahead to Phase 6 (TTS fine-tuning) before Phases 3-5 are done.
 | Week 5a | MFA alignment — Mark pilot (16 ch) | ✅ Done but flawed — 233/288 (81%), superseded below |
 | Week 5b | Phoneme G2P dictionary (roadmap Phase 1) | ✅ Done — 98.9% coverage, ~50-phone inventory |
 | Week 5c | Segment chapters into per-sentence clips (roadmap Phase 2) | 🔄 In progress — ran full 260-chapter pass locally, check `segmentation_report.csv` |
-| Week 5d | Align segments with MFA (roadmap Phase 3) | 🔲 Todo — next task, run locally via `aligner` conda env, not Colab |
-| Week 5e | QC filtering + build tts_dataset/metadata.csv (roadmap Phase 4–5) | 🔲 Todo |
-| Week 6 | MMS TTS fine-tuning from mms-tts-nep (roadmap Phase 6) | 🔲 Todo |
+| Week 5d | Align segments with MFA (roadmap Phase 3) | 🔄 Partial — 12/15 verification chapters done (89–91%); **full 260-chapter run still todo**, run locally via `aligner` conda env, not Colab |
+| Week 5e | QC filtering + build tts_dataset/metadata.csv (roadmap Phase 4–5) | ✅ Scripts done and run on the 12-chapter sample — 472/628 pass QC (75%), 0.88h dataset. Must be re-run after the full Phase 3 |
+| Week 6 | MMS TTS fine-tuning from mms-tts-nep (roadmap Phase 6) | 🔄 Prototype ready — `src/train_tts.py` + `notebooks/finetune_tts_colab.ipynb`, not yet executed |
 | Week 7–8 | Evaluation (roadmap Phase 7–8) + report + release | 🔲 Todo |
 
 Update this table as tasks complete. See "TTS roadmap" section above for the detailed

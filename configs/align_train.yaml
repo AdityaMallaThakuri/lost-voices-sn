@@ -1,11 +1,16 @@
 mode: train
 
-corpus_dir: data/processed/audio/mfa_corpus_full
+corpus_dir: data/processed/audio/mfa_corpus_segments
 dictionary_path: data/processed/audio/mfa_dict.dict
 output_model_path: models/sunuwar_acoustic_model.zip
-output_textgrid_dir: data/processed/audio/textgrids_chapters
+output_textgrid_dir: data/processed/audio/textgrids_segments
 
-# Colab CPU runtime — keep this modest to avoid RAM pressure. Raise if
-# running somewhere with more RAM headroom.
+# Local machine: i5-11400H, 6c/12t, only 7.7GB usable RAM — keep num_jobs
+# low to avoid swapping during the full 260-chapter/12,672-segment run.
 num_jobs: 4
 clean: true
+
+# MFA defaults to a temp dir under C:\Users\...\Documents\MFA — this
+# machine's C: only has ~5.5GB free, nowhere near enough for a run this
+# size. Redirect to D: (143GB free).
+temporary_directory: D:/mfa_temp

@@ -55,6 +55,9 @@ def build_command(cfg: dict) -> list:
     if cfg.get("clean", True):
         cmd.append("--clean")
 
+    if cfg.get("temporary_directory"):
+        cmd.extend(["--temporary_directory", cfg["temporary_directory"]])
+
     return cmd
 
 

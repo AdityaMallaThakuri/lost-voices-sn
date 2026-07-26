@@ -36,6 +36,16 @@ wandb/
 # Audio files — too large for GitHub; WAVs and pairs are generated outputs
 data/raw/audio/
 data/processed/audio/
+
+# TTS dataset — the .wav rule below already excludes the audio, but the
+# metadata.csv files carry the Sunuwar Bible transcripts themselves, which are
+# CC BY-NC-ND and must not be redistributed. Exclude the whole directory.
+data/processed/tts_dataset/
+
+# Trained TTS checkpoints — model.safetensors exceeds GitHub's 100MB file
+# limit. Keep them in Drive or push to the HF Hub, not here.
+models/tts/
+*.safetensors
 *.mp3
 *.wav
 *.mp4
