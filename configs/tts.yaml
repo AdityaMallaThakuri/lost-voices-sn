@@ -6,14 +6,20 @@
 
 project_name: sunuwar-tts-prototype
 
-# Sunuwar has no MMS-TTS checkpoint. Nepali is the closest available: same
-# script, same region, so the character embeddings and vocoder transfer far
-# better than random init would.
-base_checkpoint: facebook/mms-tts-nep
+# Sunuwar has no MMS-TTS checkpoint — and neither does Nepali. Verified
+# 2026-07-27: facebook/mms-tts-nep and -npi both 404, and no Nepali code
+# exists under facebook/mms-tts full_models/.
+#
+# Maithili was selected by measuring each candidate tokenizer's character
+# coverage of this dataset (34,863 chars): mai 98.65% (missing only the
+# danda), hin 97.83%, mar 93.03%, non-Devanagari controls 15.51%. Maithili is
+# also a Nepal contact language (Terai), so the linguistic and empirical
+# choices agree. ZWJ (U+200D) is in the vocab — no ZWJ remapping needed.
+base_checkpoint: facebook/mms-tts-mai
 
 # Produced by the notebook's conversion cell — the released checkpoint has no
 # discriminator, which VITS' GAN objective requires.
-discriminator_checkpoint: /content/mms-tts-nep-train
+discriminator_checkpoint: /content/mms-tts-base-train
 
 dataset_dir: /content/tts_dataset
 output_dir: /content/drive/MyDrive/sunuwar_tts/prototype
