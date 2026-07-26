@@ -24,11 +24,15 @@ Output layout is HuggingFace `audiofolder`-compatible, so Phase 6 can do
 `load_dataset("audiofolder", data_dir=...)` and get the splits for free:
 
     tts_dataset/
-        metadata.csv              full manifest (all splits, extra columns)
+        manifest.csv              full manifest (all splits, extra columns)
         train/metadata.csv        file_name,text
         train/<segment>.wav
         validation/metadata.csv
         validation/<segment>.wav
+
+The full manifest is deliberately NOT called metadata.csv: audiofolder walks
+the whole tree, and a top-level metadata.csv with extra columns collides with
+the per-split ones ("Metadata files ... have different features").
 
 Usage: python src/build_tts_dataset.py configs/tts_dataset.yaml
 """
@@ -207,11 +211,13 @@ def main(config_path: str) -> None:
         for segment, reason in skipped[:10]:
             log(f"    {segment}: {reason}")
 
-    # The top-level metadata.csv is the full manifest (both splits, extra
-    # provenance columns) for our own analysis; the per-split ones are the
-    # plain two-column form the audiofolder loader expects.
+    # manifest.csv is the full record (both splits, extra provenance columns)
+    # for our own analysis; the per-split metadata.csv files are the plain
+    # two-column form the audiofolder loader expects. Naming this one
+    # metadata.csv too makes audiofolder reject the dataset for having
+    # inconsistent features across metadata files.
     full_fields = ["file_name", "text", "segment", "chapter", "book", "duration_s", "split"]
-    with (out_dir / "metadata.csv").open("w", encoding="utf-8", newline="") as f:
+    with (out_dir / "manifest.csv").open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=full_fields)
         writer.writeheader()
         writer.writerows(rows)
@@ -250,7 +256,7 @@ def main(config_path: str) -> None:
         encoding="utf-8",
     )
     log(f"dataset written          : {out_dir}")
-    log(f"  metadata.csv, charset.txt, train/, validation/")
+    log(f"  manifest.csv, charset.txt, train/, validation/")
 
 
 if __name__ == "__main__":
