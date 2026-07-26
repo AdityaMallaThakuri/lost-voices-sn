@@ -220,8 +220,25 @@ don't apply; the coverage/QC/G2P parts do.
   speaking rate — false).
 - `mfa_dict.dict` used to map words to **individual Devanagari characters** as
   "phones" (fixed in Phase 1, see below).
-- Sunuwar (`suz`) has no existing MMS-TTS checkpoint. Plan: transfer-learn from
-  `facebook/mms-tts-nep` (Nepali, same script) rather than random init.
+- Sunuwar (`suz`) has no existing MMS-TTS checkpoint. **Nor does Nepali** —
+  verified empirically 2026-07-27: `facebook/mms-tts-nep` and `-npi` both 404,
+  and no Nepali code appears under `facebook/mms-tts` `full_models/` (the
+  nearest codes present are `neb`, `new`, `npl`, `npy`). The "transfer-learn
+  from mms-tts-nep" plan written into this roadmap was never viable.
+- **Base checkpoint is `facebook/mms-tts-mai` (Maithili)**, chosen by measuring
+  each candidate tokenizer's character coverage of the actual Sunuwar dataset
+  (34,863 chars) rather than by assumption:
+
+  | candidate | vocab | coverage | missing |
+  |-----------|-------|----------|---------|
+  | **mai**   | 67    | **98.65%** | U+0964 danda only |
+  | hin       | 73    | 97.83%   | 2 distinct |
+  | mar       | 74    | 93.03%   | 3 distinct |
+  | ben/guj/eng | –   | 15.51%   | 50 distinct (non-Devanagari controls) |
+
+  Maithili is also a Nepal contact language (Terai), so the linguistic and
+  empirical choices agree. **ZWJ (U+200D) is present in all three Devanagari
+  vocabs** — the feared ZWJ remapping is not needed; only the danda is dropped.
 - Whisper cannot transcribe Sunuwar — WER-vs-Whisper (the CLAUDE.md eval target) is
   not a trustworthy intelligibility metric on its own. Treat it as secondary/exploratory
   only; real evaluation needs a Sunuwar speaker's judgment.
