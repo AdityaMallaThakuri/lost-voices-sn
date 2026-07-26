@@ -42,6 +42,9 @@ data/processed/audio/
 # CC BY-NC-ND and must not be redistributed. Exclude the whole directory.
 data/processed/tts_dataset/
 
+# Dataset zip staged for upload to Drive — licensed audio + transcripts
+tts_dataset.zip
+
 # Trained TTS checkpoints — model.safetensors exceeds GitHub's 100MB file
 # limit. Keep them in Drive or push to the HF Hub, not here.
 models/tts/
