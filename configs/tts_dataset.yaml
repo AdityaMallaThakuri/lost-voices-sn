@@ -17,12 +17,14 @@ strip_unspoken_numerals: true
 
 # Whole chapters are held out, never random segments — adjacent verses share
 # phrasing, so a random split leaks near-duplicates into validation.
-# For the current 12-chapter verification sample these two are held out
-# (one narrative Gospel chapter, one Revelation chapter — different books
-# and registers from each other and from the rest of the sample).
+# One clean chapter per register, now that batch2 adds epistles to the sample:
+# LUK_005 (Gospel narrative), REV_021 (apocalyptic), GAL_001 (epistle — chosen
+# over ROM_008/EPH_004 because those two carry segmentation damage and would
+# make the val metric noisy rather than representative).
 # Comment this out and set `val_fraction` instead to pick chapters at random
 # (seeded, reproducible) once the full 260-chapter corpus is aligned.
 val_chapters:
   - LUK_005
   - REV_021
+  - GAL_001
 # val_fraction: 0.1

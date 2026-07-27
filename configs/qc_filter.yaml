@@ -16,6 +16,10 @@ batches:
     analysis_csv: D:/mfa_temp_batch1/mfa_corpus/sat_3_ali/alignment_analysis.csv
     textgrid_dir: data/processed/audio/phase3_verification/batch1/textgrids
     corpus_dir: data/processed/audio/phase3_verification/batch1/mfa_corpus
+  - name: batch2
+    analysis_csv: D:/mfa_temp_batch2/mfa_corpus/sat_3_ali/alignment_analysis.csv
+    textgrid_dir: data/processed/audio/phase3_verification/batch2/textgrids
+    corpus_dir: data/processed/audio/phase3_verification/batch2/mfa_corpus
   - name: batch3
     analysis_csv: D:/mfa_temp_batch3/mfa_corpus/sat_3_ali/alignment_analysis.csv
     textgrid_dir: data/processed/audio/phase3_verification/batch3/textgrids
