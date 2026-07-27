@@ -1,8 +1,8 @@
 # Phase 6 — fine-tune MMS-TTS on the Sunuwar single-speaker dataset.
 #
-# Defaults are tuned for the current 0.88h verification dataset on a Colab
-# T4: this is a pipeline smoke test, not a release run. See the notes at the
-# bottom for what to change once the full corpus is aligned.
+# Defaults are tuned for the current 1.37h/18-chapter verification dataset on
+# a Colab T4: this is a pipeline smoke test, not a release run. See the notes
+# at the bottom for what to change once the full corpus is aligned.
 
 project_name: sunuwar-tts-prototype
 
@@ -36,8 +36,9 @@ danda_replacement: ""      # "।" -> dropped unless the vocab has a full stop
 #   "।": "."
 
 # --- training -------------------------------------------------------------
-# 362 training clips at batch 8 is ~45 steps/epoch. 200 epochs ~= 9k steps,
-# roughly 1.5-2.5h on a free T4 — inside one Colab session with headroom.
+# 554 training clips at batch 8 is ~70 steps/epoch. 200 epochs ~= 14k steps,
+# roughly 5h on a free T4 at the previous run's measured 1.32 s/it — near the
+# edge of a single free-tier session; watch for disconnects.
 batch_size: 8
 eval_batch_size: 8
 gradient_accumulation_steps: 1
@@ -74,7 +75,7 @@ save_total_limit: 2
 report_to: []              # set to ["wandb"] once you have a run to track
 
 # --- scaling up (after the full 260-chapter Phase 3/4/5 rerun) -------------
-# ~20h of audio instead of 0.88h, roughly 20x the clips:
+# ~20h of audio instead of 1.37h, roughly 15x the clips:
 #   num_train_epochs: 30-50   (step count matters, not epochs)
 #   batch_size: 16            (fits a T4 at these durations; use A100 if free)
 #   save_steps: 1000
