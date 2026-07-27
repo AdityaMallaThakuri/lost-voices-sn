@@ -316,13 +316,15 @@ don't apply; the coverage/QC/G2P parts do.
    see "Phase 3 verification complete" below), **full 260-chapter run still todo**.
    `src/align.py` (train mode) using the Phase 1 dictionary, producing the acoustic
    model + TextGrids. Confirmed better than the pilot's 81%.
-4. **QC filtering with explicit thresholds** — use MFA's own per-utterance
-   `overall_log_likelihood`, `phone_duration_deviation`, `snr` output (confirmed via
-   the pilot's `alignment_analysis.csv` — this is MFA's built-in output, no custom
-   script needed) plus the pre-alignment duration-outlier flag from step 2, to drop
-   bad segments before they become training data.
-5. **Build `data/processed/tts_dataset/metadata.csv`** from QC-passed segments.
-   Hold out whole chapters (not random segments) for validation to avoid
+4. **QC filtering with explicit thresholds** — 🔄 run on all 18 verification
+   chapters (see "Phase 4-5 rerun" below), 690/915 = 75.4% pass; **full-corpus run
+   still todo**. Uses MFA's own per-utterance `overall_log_likelihood`,
+   `phone_duration_deviation`, `snr` output (this is MFA's built-in output, no
+   custom script needed) plus the pre-alignment duration-outlier flag from step 2,
+   to drop bad segments before they become training data.
+5. **Build `data/processed/tts_dataset/metadata.csv`** from QC-passed segments —
+   🔄 690 clips/1.37h built on the 18-chapter sample; **full-corpus run still
+   todo**. Hold out whole chapters (not random segments) for validation to avoid
    near-duplicate scriptural phrasing leaking train→val.
 6. **Fine-tune from `facebook/mms-tts-mai`** (Maithili — `-nep` does not exist,
    see "Key facts established"), not from scratch — cross-lingual transfer
@@ -406,13 +408,34 @@ Next concrete steps to resume, in order:
 5. Run via the local `aligner` conda env — not Colab, MFA already works locally.
 6. Then re-run Phase 4-5 on the full output.
 
-Phase 4 can be prototyped further without the full run by adding a `batch2` entry
-to `configs/qc_filter.yaml` (it currently lists only batch0/1/3) and re-running
-`qc_filter.py` + `build_tts_dataset.py` — grows the sample from ~0.88h to ~1.5h.
-That re-validates thresholds against the two worst chapters seen so far; it does
-**not** produce a trainable dataset.
+### Phase 4-5 rerun on all 18 chapters (2026-07-27)
 
-Do not skip ahead to Phase 6 (TTS fine-tuning) before Phases 3-5 are done.
+`batch2` added to `configs/qc_filter.yaml` and QC re-run with thresholds held
+**fixed** from the batch0/1/3 fit — batch2 was treated as a genuine held-out
+test, not re-tuned on. They generalised: batch2 passed at 76.0%, in line with
+the other three batches (70.6-84.1%), and ROM_008/EPH_004 (the two chapters
+flagged for segmentation damage) were not standout outliers post-QC —
+comparable to MAT_010/MAT_001, which have no known segmentation issue. QC is
+catching the bad segments as intended; thresholds did not need retuning.
+
+Overall: **690/915 pass (75.4%), 1.34h kept of 2.06h.**
+
+`configs/tts_dataset.yaml`'s `val_chapters` gained `GAL_001` (clean, 83.9% QC
+pass) alongside the existing `LUK_005`/`REV_021`, so validation now covers one
+clean chapter per register (epistle/Gospel/apocalyptic) rather than lacking
+epistles entirely. ROM_008/EPH_004 were deliberately excluded from validation
+— their segmentation damage would make the val metric noisy, not
+representative; they stay in training where QC filters their bad segments.
+
+Rebuilt `data/processed/tts_dataset/` (gitignored, licensed content): **690
+clips / 1.37h**, split 554 train (1.12h) / 136 validation (0.26h) — up from
+the previous 472-clip/0.88h prototype. Still well short of what full Phase 3
+will produce; **not** yet suitable to replace the running Colab prototype
+fine-tune. Its value here was validating that the QC thresholds hold on a
+wider, more varied sample before the full 260-chapter run.
+
+Do not skip ahead to Phase 6 (TTS fine-tuning) before Phases 3-5 are done on
+the full corpus.
 
 ### Phase 6 environment (validated 2026-07-27)
 
@@ -499,7 +522,7 @@ counts, not epochs (~20x the clips).
 | Week 5b | Phoneme G2P dictionary (roadmap Phase 1) | ✅ Done — 98.9% coverage, ~50-phone inventory |
 | Week 5c | Segment chapters into per-sentence clips (roadmap Phase 2) | 🔄 In progress — ran full 260-chapter pass locally, check `segmentation_report.csv` |
 | Week 5d | Align segments with MFA (roadmap Phase 3) | 🔄 Verification complete — all 4 batches, 18 chapters, 810/915 = 88.5%; **full 260-chapter run still todo** (~2.5 days single-threaded, test `--single_speaker` first), run locally via `aligner` conda env, not Colab |
-| Week 5e | QC filtering + build tts_dataset/metadata.csv (roadmap Phase 4–5) | 🔄 Scripts done and run on batches 0/1/3 only — 472/628 pass QC (75%), 0.88h dataset. `configs/qc_filter.yaml` still lacks a `batch2` entry. Must be re-run after the full Phase 3 |
+| Week 5e | QC filtering + build tts_dataset/metadata.csv (roadmap Phase 4–5) | 🔄 Re-run on all 18 verification chapters (batch2 added) — 690/915 pass QC (75.4%), 1.37h dataset, thresholds held fixed and generalised without retuning. Must be re-run again after the full Phase 3 |
 | Week 6 | MMS TTS fine-tuning from mms-tts-**mai** (roadmap Phase 6) | 🔄 Running — prototype fine-tune launched 2026-07-27 on the 0.88h dataset, 9,000 steps / ~3h18m on a Colab T4. Pipeline validated end to end |
 | Week 7–8 | Evaluation (roadmap Phase 7–8) + report + release | 🔲 Todo |
 
