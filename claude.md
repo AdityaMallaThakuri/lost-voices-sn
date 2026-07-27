@@ -352,6 +352,35 @@ Next concrete steps to resume, in order:
 
 Do not skip ahead to Phase 6 (TTS fine-tuning) before Phases 3-5 are done.
 
+### Phase 6 environment (validated 2026-07-27)
+
+The Colab fine-tune **works**, but only after nine environment fixes, all now
+baked into `notebooks/finetune_tts_colab.ipynb` — run that notebook rather than
+improvising, and do not "simplify" its patch cells away. The non-obvious ones:
+
+- **Pin `transformers==4.44.2`** (+ `huggingface_hub==0.24.6`,
+  `datasets==2.21.0`, `accelerate==0.34.2`, `tokenizers==0.19.1`, `numpy<2`).
+  Downgrading *over* an existing 5.x install leaves a mixed package — always
+  start from a fresh runtime.
+- **Remap `weight_g`/`weight_v` → `parametrizations.weight.original0/1`**
+  before conversion. torch ≥2.1 renamed these, and `from_pretrained` silently
+  random-initialises the flow + posterior-encoder WaveNet stacks instead of
+  erroring. This is the fix most likely to be dropped by accident and the one
+  that most damages quality if it is.
+- `save_file` needs `metadata={"format": "pt"}`.
+- Pass discriminator/generator paths separately to the conversion script;
+  `--language_code` re-derives the generator and undoes the remap.
+- `data_dir` is not a trainer field — the local path goes in `dataset_name`.
+- Two upstream bugs in `run_vits_finetuning.py` need patching: the
+  unconditional `batch["speaker_id"]` read (single-speaker path) and
+  `utils/plot.py`'s use of matplotlib's removed `tostring_rgb()`.
+
+Verify patches in a **fresh interpreter** (`!python -c ...`) — modules already
+imported in the notebook are cached and will report a patch as absent.
+
+Throughput: **1.32 s/it on a Colab T4**. Plan the full-corpus run in step
+counts, not epochs (~20x the clips).
+
 ---
 
 ## Evaluation targets
@@ -409,7 +438,7 @@ Do not skip ahead to Phase 6 (TTS fine-tuning) before Phases 3-5 are done.
 | Week 5c | Segment chapters into per-sentence clips (roadmap Phase 2) | 🔄 In progress — ran full 260-chapter pass locally, check `segmentation_report.csv` |
 | Week 5d | Align segments with MFA (roadmap Phase 3) | 🔄 Partial — 12/15 verification chapters done (89–91%); **full 260-chapter run still todo**, run locally via `aligner` conda env, not Colab |
 | Week 5e | QC filtering + build tts_dataset/metadata.csv (roadmap Phase 4–5) | ✅ Scripts done and run on the 12-chapter sample — 472/628 pass QC (75%), 0.88h dataset. Must be re-run after the full Phase 3 |
-| Week 6 | MMS TTS fine-tuning from mms-tts-nep (roadmap Phase 6) | 🔄 Prototype ready — `src/train_tts.py` + `notebooks/finetune_tts_colab.ipynb`, not yet executed |
+| Week 6 | MMS TTS fine-tuning from mms-tts-**mai** (roadmap Phase 6) | 🔄 Running — prototype fine-tune launched 2026-07-27 on the 0.88h dataset, 9,000 steps / ~3h18m on a Colab T4. Pipeline validated end to end |
 | Week 7–8 | Evaluation (roadmap Phase 7–8) + report + release | 🔲 Todo |
 
 Update this table as tasks complete. See "TTS roadmap" section above for the detailed
