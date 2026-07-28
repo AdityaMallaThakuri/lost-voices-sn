@@ -26,7 +26,7 @@ output_dir: /content/drive/MyDrive/sunuwar_tts/prototype
 
 # Set after a Colab disconnect to continue from the last save instead of
 # restarting at step 0. Comment out (or remove) for a fresh run.
-resume_from_checkpoint: /content/drive/MyDrive/sunuwar_tts/prototype/checkpoint-2000
+resume_from_checkpoint: /content/drive/MyDrive/sunuwar_tts/prototype/checkpoint-5500
 finetune_repo_dir: /content/finetune-hf-vits
 training_json: /content/_tts_finetune.json
 

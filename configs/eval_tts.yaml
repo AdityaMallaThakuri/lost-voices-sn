@@ -1,0 +1,6 @@
+# Set checkpoint_dir to whichever checkpoint you want to evaluate — e.g.
+# /content/drive/MyDrive/sunuwar_tts/prototype/checkpoint-5500
+output_dir: /content/drive/MyDrive/sunuwar_tts/prototype
+checkpoint_dir: /content/drive/MyDrive/sunuwar_tts/prototype/checkpoint-5500
+dataset_dir: /content/tts_dataset
+output_path: results/tts_eval.json
