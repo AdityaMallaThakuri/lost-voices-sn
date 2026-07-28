@@ -196,6 +196,7 @@ def build_training_json(cfg: dict, dataset_dir: Path, out_path: Path) -> dict:
         "model_name_or_path": cfg["discriminator_checkpoint"],
         "output_dir": cfg["output_dir"],
         "overwrite_output_dir": True,
+        "resume_from_checkpoint": cfg.get("resume_from_checkpoint"),
 
         # The trainer has no `data_dir` field (verified by introspecting its
         # dataclasses), so the local directory goes straight into
