@@ -25,7 +25,8 @@ the base-checkpoint weight-norm remap in notebooks/finetune_tts_colab.ipynb).
 `load_checkpoint_model` below re-applies weight_norm before loading, then
 removes it again afterward for clean inference.
 
-Usage (run in Colab, where librosa/torch/transformers are already installed):
+Usage (run in Colab, where torch/transformers are already installed):
+    !pip install -q librosa pyworld pysptk
     python src/evaluate_tts.py configs/eval_tts.yaml
 """
 
@@ -96,10 +97,24 @@ def synthesize(model, tokenizer, text: str):
 # --------------------------------------------------------------------------
 # Reference and synthesized audio are different lengths (the model's own
 # rhythm/pacing won't exactly match the narrator's), so frames are matched
-# with dynamic time warping on MFCCs before computing either metric — the
-# same warping path is reused for F0 so both numbers come from one alignment.
+# with dynamic time warping on mel-cepstral coefficients (mgc) before
+# computing either metric — the same warping path is reused for F0 so both
+# numbers come from one alignment.
+#
+# mgc, not raw librosa MFCC: the classic MCD dB formula's constant
+# (10/ln(10)*sqrt(2)) is calibrated for true mel-cepstral coefficients as
+# extracted via a vocoder analysis (WORLD + SPTK's mel-cepstral conversion),
+# which are small-magnitude (~0.01-1). Plain librosa MFCC (DCT of the log-mel
+# spectrogram) is a different, much larger-magnitude quantity — plugging that
+# into the same formula inflates the number 10-50x with no real calibration,
+# confirmed empirically: two DIFFERENT real reference recordings compared
+# against each other came out at ~550 "dB" with the librosa-MFCC version,
+# which is impossible for genuine speech and would have been silently
+# reported as if it were a real MCD. Use pyworld (F0 + spectral envelope)
+# and pysptk (envelope -> mgc) instead, matching what ESPnet/ParallelWaveGAN
+# eval scripts actually do.
 
-N_MFCC = 13  # standard MCD coefficient count, excludes energy (c0)
+MCEP_DIM = 24  # standard mel-cepstral order for MCD (excludes c0)
 
 
 def _mcd_const():
@@ -107,12 +122,25 @@ def _mcd_const():
     return 10.0 / np.log(10.0) * np.sqrt(2.0)
 
 
-def extract_mfcc(wav, sr: int):
-    import librosa
+def extract_world_features(wav, sr: int):
+    """F0 contour + WORLD spectral envelope, shared by MCD and F0 RMSE."""
     import numpy as np
+    import pyworld as pw
 
-    mfcc = librosa.feature.mfcc(y=wav.astype(np.float32), sr=sr, n_mfcc=N_MFCC + 1)
-    return mfcc[1:]  # drop c0 (energy), keep c1..c13
+    x = np.ascontiguousarray(wav.astype(np.float64))
+    f0, time_axis = pw.dio(x, sr)
+    f0 = pw.stonemask(x, f0, time_axis, sr)
+    _, spectral_envelope, _ = pw.wav2world(x, sr)
+    return f0, spectral_envelope
+
+
+def envelope_to_mgc(spectral_envelope, sr: int):
+    """WORLD spectral envelope -> mel-cepstral coefficients, c0 dropped, shape (D, T)."""
+    import pysptk
+
+    alpha = pysptk.util.mcepalpha(sr)
+    mgc = pysptk.sp2mc(spectral_envelope, MCEP_DIM, alpha)
+    return mgc[:, 1:].T  # drop c0 (energy), transpose to (D, T) for DTW
 
 
 def dtw_align(ref_feat, syn_feat):
@@ -123,38 +151,16 @@ def dtw_align(ref_feat, syn_feat):
     return wp[::-1]  # librosa returns the path end-to-start
 
 
-def compute_mcd(ref_wav, syn_wav, sr: int) -> float:
+def compute_mcd(ref_mgc, syn_mgc, path) -> float:
     import numpy as np
 
-    ref_mfcc = extract_mfcc(ref_wav, sr)
-    syn_mfcc = extract_mfcc(syn_wav, sr)
-    path = dtw_align(ref_mfcc, syn_mfcc)
-
-    diffs = ref_mfcc[:, path[:, 0]] - syn_mfcc[:, path[:, 1]]
+    diffs = ref_mgc[:, path[:, 0]] - syn_mgc[:, path[:, 1]]
     per_frame_db = _mcd_const() * np.sqrt(np.sum(diffs ** 2, axis=0))
     return float(np.mean(per_frame_db))
 
 
-def extract_f0(wav, sr: int):
-    import librosa
+def compute_f0_rmse(ref_f0, syn_f0, path) -> float:
     import numpy as np
-
-    f0, _voiced_flag, _voiced_prob = librosa.pyin(
-        wav.astype(np.float32), sr=sr,
-        fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C6"),
-    )
-    return np.nan_to_num(f0, nan=0.0)
-
-
-def compute_f0_rmse(ref_wav, syn_wav, sr: int) -> float:
-    import numpy as np
-
-    ref_mfcc = extract_mfcc(ref_wav, sr)
-    syn_mfcc = extract_mfcc(syn_wav, sr)
-    path = dtw_align(ref_mfcc, syn_mfcc)
-
-    ref_f0 = extract_f0(ref_wav, sr)
-    syn_f0 = extract_f0(syn_wav, sr)
 
     ref_idx = np.clip(path[:, 0], 0, len(ref_f0) - 1)
     syn_idx = np.clip(path[:, 1], 0, len(syn_f0) - 1)
@@ -190,8 +196,14 @@ def main() -> None:
         ref_wav, _ = librosa.load(val_dir / row["file_name"], sr=sr)
         syn_wav = synthesize(model, tokenizer, row["text"])
 
-        mcd = compute_mcd(ref_wav, syn_wav, sr)
-        f0_rmse = compute_f0_rmse(ref_wav, syn_wav, sr)
+        ref_f0, ref_env = extract_world_features(ref_wav, sr)
+        syn_f0, syn_env = extract_world_features(syn_wav, sr)
+        ref_mgc = envelope_to_mgc(ref_env, sr)
+        syn_mgc = envelope_to_mgc(syn_env, sr)
+        path = dtw_align(ref_mgc, syn_mgc)
+
+        mcd = compute_mcd(ref_mgc, syn_mgc, path)
+        f0_rmse = compute_f0_rmse(ref_f0, syn_f0, path)
         results.append({
             "file_name": row["file_name"],
             "mcd_db": round(mcd, 4),
