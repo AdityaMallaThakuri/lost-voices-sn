@@ -1,0 +1,12 @@
+mode: train
+
+corpus_dir: data/processed/audio/phase3_verification/batch2/mfa_corpus
+dictionary_path: data/processed/audio/mfa_dict.dict
+output_model_path: models/phase3_verification/batch2.zip
+output_textgrid_dir: data/processed/audio/phase3_verification/batch2/textgrids
+
+# Verification batch 2 of 3 (15-chapter sample plan): ROM_008, GAL_001,
+# EPH_004, PHP_002, HEB_011, JAS_001 — 6 chapters, 287 segments.
+num_jobs: 4
+clean: true
+temporary_directory: D:/mfa_temp_batch2

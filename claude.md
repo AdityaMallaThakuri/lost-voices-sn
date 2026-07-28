@@ -267,27 +267,38 @@ don't apply; the coverage/QC/G2P parts do.
   mean, only 1/670 segments under 1s). This is now `src/segment_from_pauses.py`.
 
 - **Full-corpus segmentation run completed** (2026-07-19): 260/260 chapters, zero
-  fallbacks, **13,192 segments** written to
+  fallbacks, 13,192 segments written to
   `data/processed/audio/mfa_corpus_segments/speaker1/`, total duration recovered
   29.50h (exact match to source — no audio lost). Mean/median duration 8.1s/6.8s.
   912 segments (6.9%) flagged low-confidence (duration outlier). Report at
-  `data/processed/audio/segmentation_report.csv`.
-- **Disk space blocker found, not yet fixed**: MFA's default temp directory is
-  `C:\Users\ASUS\Documents\MFA`, and **C: only has 5.5GB free**. The pilot's temp
-  usage was 631MB for 288 segments/1.8h audio; scaling to 13,192 segments/29.5h
-  could plausibly need 10-30GB. Must pass `--temporary_directory` pointed at D:
-  (152GB free) before running Phase 3 training, or it will likely fail partway
+  `data/processed/audio/segmentation_report.csv`. **The intro-offset fix
+  (`src/fix_intro_offset.py`, 2026-07-25) then reduced this to 12,672 segments** —
+  that is the current count on disk and in `segmentation_report.csv`. Use 12,672,
+  not 13,192, for any scaling estimate.
+- **Disk space blocker, resolved by config**: MFA's default temp directory is
+  `C:\Users\ASUS\Documents\MFA` on a C: drive with only ~10GB free. Measured temp
+  usage is modest — batch2's 287 segments used 132MB, and the pilot's 288
+  segments/1.8h used 631MB — so 12,672 segments plausibly needs a few GB, not the
+  10-30GB feared. Still pass `--temporary_directory` pointed at D:
+  (141GB free) before running Phase 3 training, or it may fail partway
   through a multi-hour run from running out of disk.
 - **Phase 3 is not model training** — it's a data-verification step. MFA's
   "acoustic model" here is a disposable Kaldi tool that only produces alignment
   timestamps/confidence scores to validate Phase 2's segmentation guesses; it is
   never used as, or related to, the actual Sunuwar TTS model (that's Phase 6,
-  fine-tuning `facebook/mms-tts-nep`). Don't conflate the two when resuming.
-- **Phase 3 time/resource expectation**: no GPU needed (Kaldi/CPU). RAM: keep
-  `num_jobs` at 3-4 given 7.7GB usable. Time: pilot's 288-segment/1.8h run took
-  ~92 min locally; this run is 13,192 segments/29.5h (16-46x more depending on
-  which dimension dominates scaling) — realistically many hours, possibly most of
-  a day. Plan to run in the background/overnight, not expect a quick turnaround.
+  fine-tuning `facebook/mms-tts-mai`). Don't conflate the two when resuming.
+- **Phase 3 time/resource expectation**: no GPU needed (Kaldi/CPU). Measured on
+  the verification batches: 287 segments → 89 min, 350 segments → 108 min, i.e.
+  **~0.3 min per segment**. Extrapolated to 12,672 segments that is **~2.5 days**.
+- **`num_jobs` is silently ignored on this corpus — MFA runs single-threaded.**
+  Confirmed in the batch2 log: `Number of jobs was specified as 4, but due to
+  only having 1 speakers, MFA will only use 1 jobs. Use the --single_speaker
+  flag if you would like to split utterances across jobs regardless of their
+  speaker.` Every verification batch therefore ran on one core of a 6c/12t CPU.
+  **Test `--single_speaker` before committing to the full run** — it is the
+  difference between ~2.5 days and plausibly well under a day, and it is not
+  yet wired into `src/align.py` or the configs. RAM stays the constraint that
+  caps parallelism (7.7GB usable), so try 3-4 jobs, not 12.
 
 ### Phases (do in order — each depends on the previous)
 1. **G2P / phoneme dictionary** — ✅ done. `src/g2p.py` + `configs/g2p_sunuwar.yaml`,
@@ -301,21 +312,25 @@ don't apply; the coverage/QC/G2P parts do.
    duration-outlier segments (<1.5s or >20s) as low-confidence rather than dropping
    them silently, writes `data/processed/audio/segmentation_report.csv`.
    `src/split_audio_chunks.py` is now superseded — do not use it going forward.
-3. **Align the segments with MFA** — `src/align.py` (train mode) on the full
-   corpus using the Phase 1 dictionary, producing the acoustic model + TextGrids.
-   Since text per segment is now correct (not guessed), this should perform far
-   better than the pilot's 81%.
-4. **QC filtering with explicit thresholds** — use MFA's own per-utterance
-   `overall_log_likelihood`, `phone_duration_deviation`, `snr` output (confirmed via
-   the pilot's `alignment_analysis.csv` — this is MFA's built-in output, no custom
-   script needed) plus the pre-alignment duration-outlier flag from step 2, to drop
-   bad segments before they become training data.
-5. **Build `data/processed/tts_dataset/metadata.csv`** from QC-passed segments.
-   Hold out whole chapters (not random segments) for validation to avoid
+3. **Align the segments with MFA** — 🔄 verification done (18 chapters, 88.5% —
+   see "Phase 3 verification complete" below), **full 260-chapter run still todo**.
+   `src/align.py` (train mode) using the Phase 1 dictionary, producing the acoustic
+   model + TextGrids. Confirmed better than the pilot's 81%.
+4. **QC filtering with explicit thresholds** — 🔄 run on all 18 verification
+   chapters (see "Phase 4-5 rerun" below), 690/915 = 75.4% pass; **full-corpus run
+   still todo**. Uses MFA's own per-utterance `overall_log_likelihood`,
+   `phone_duration_deviation`, `snr` output (this is MFA's built-in output, no
+   custom script needed) plus the pre-alignment duration-outlier flag from step 2,
+   to drop bad segments before they become training data.
+5. **Build `data/processed/tts_dataset/metadata.csv`** from QC-passed segments —
+   🔄 690 clips/1.37h built on the 18-chapter sample; **full-corpus run still
+   todo**. Hold out whole chapters (not random segments) for validation to avoid
    near-duplicate scriptural phrasing leaking train→val.
-6. **Fine-tune from `facebook/mms-tts-nep`**, not from scratch — cross-lingual
-   transfer converges faster and sounds more natural on limited single-speaker data
-   than training a VITS model cold. May need Devanagari/ZWJ token remapping.
+6. **Fine-tune from `facebook/mms-tts-mai`** (Maithili — `-nep` does not exist,
+   see "Key facts established"), not from scratch — cross-lingual transfer
+   converges faster and sounds more natural on limited single-speaker data than
+   training a VITS model cold. ZWJ remapping turned out NOT to be needed; only the
+   danda is missing from the `mai` vocab.
 7. **Evaluate honestly** — MFA self-alignment-confidence of resynthesized audio as
    a cheap automatic signal; real naturalness/intelligibility judgment needs an
    actual Sunuwar speaker (community review), not just Whisper-WER.
@@ -336,21 +351,91 @@ can't cross a sentence boundary) and `mfa_input/` regenerated: 181,993 →
 dirty text** — re-run `segment_from_pauses.py` before the full Phase 3 run.
 Phase 5 strips the remnants as a safety net (`strip_unspoken_numerals`).
 
-Currently on: **Phase 2 done, Phase 3 not started yet — paused here.** Segmentation
-results already confirmed good (see "Full-corpus segmentation run completed" above).
+### Phase 3 verification complete (2026-07-27) — 18 chapters, 88.5%
+
+All four verification batches are done. **This is the sample, not the corpus:
+18 of 260 chapters (6.9%), 915 of 12,672 segments (7.2%), 2.06h of 29.5h.**
+
+| batch | chapters | segments | aligned | rate | wall-clock |
+|-------|----------|----------|---------|------|------------|
+| batch0_1CO_pilot | 3 (1CO 1-3) | 113 | 101 | 89.4% | – |
+| batch1 | 6 (MAT 1, MAT 10, MRK 1, LUK 5, JHN 3, ACT 2) | 350 | 319 | 91.1% | 1h48m |
+| batch2 | 6 (ROM 8, GAL 1, EPH 4, PHP 2, HEB 11, JAS 1) | 287 | 243 | 84.7% | 1h29m |
+| batch3 | 3 (1PE 2, REV 1, REV 21) | 165 | 147 | 89.1% | 25m |
+| **total** | **18** | **915** | **810** | **88.5%** | ~4h |
+
+**88.5% vs the old Mark pilot's 81%**, sustained across 12 different books —
+the intro-offset fix generalises and the ranked-silence segmentation is sound.
+
+Outputs per batch: `data/processed/audio/phase3_verification/<batch>/textgrids/`
+(the real product — 810 TextGrids, **gitignored**, licensed content),
+`models/phase3_verification/<batch>.zip` (disposable Kaldi model), and
+`D:/mfa_temp_batch*/mfa_corpus/sat_3_ali/alignment_analysis.csv` (Phase 4's
+input — **the only copy, outside the repo, do not clean these temp dirs**).
+
+**Findings from batch2 — three hypotheses tested, two refuted:**
+- **Chapter length does NOT degrade alignment.** HEB_011 was the largest chapter
+  in the whole sample (88 segments) and hit 90.9%. Refuted.
+- **OOV does NOT explain per-chapter variance.** ROM_008 has the *lowest* OOV
+  rate of its batch (7.02%) and the *worst* alignment (71.4%); OOV is otherwise
+  flat at 7-9.4% everywhere. Refuted.
+- **The Phase 2 duration-outlier flag DOES predict failure**: low-confidence
+  segments aligned at **23.5% (4/17)** vs **88.5% (239/270)** for high-confidence.
+  batch2's two outlier chapters are explained by this — ROM_008 carries 7 flagged
+  segments (14% of the chapter, vs 1-2 in healthy chapters) and a 12.0s mean
+  duration vs ~8s elsewhere, the signature of the ranked-pause heuristic merging
+  sentences. Caveat: this does *not* argue for flipping
+  `drop_low_confidence_segments` to true — `alignment_failed` already drops the 13
+  that failed, so flipping it would remove only the 4 that succeeded. Its value is
+  as a *pre-alignment* predictor of which chapters need re-segmentation.
+- **MFA's text normaliser strips the danda itself.** A naive dict lookup makes it
+  look like ~77% of OOV tokens are just words with `।` attached, but
+  `normalize_oov.log` shows MFA never saw those as OOV. The only real OOVs are the
+  transcript-bug remnants below (~37 types). Don't "fix" the danda.
+
+Currently on: **Phase 3 verification done; full 260-chapter Phase 3 NOT started.**
 Next concrete steps to resume, in order:
-1. Fix `configs/align_train.yaml`: `corpus_dir` still points at the old
+1. Re-run `src/segment_from_pauses.py` — `mfa_corpus_segments/` still holds the
+   pre-fix transcripts (see transcript bug above). **This invalidates the 810
+   verification TextGrids**, so the full run supersedes rather than extends them.
+2. Test `--single_speaker` on one chapter (see throughput note above) before
+   committing ~2.5 days of single-threaded compute.
+3. Fix `configs/align_train.yaml`: `corpus_dir` still points at the old
    `mfa_corpus_full` (whole chapters — the one that failed 0/16). Repoint it at
    `data/processed/audio/mfa_corpus_segments`.
-2. Add `--temporary_directory` pointed at a D: path to the `mfa train` command in
-   `src/align.py` (or config) — **do not skip this**, C: only has 5.5GB free and
-   will likely run out of space partway through otherwise.
-3. Run via the local `aligner` conda env (`conda run -n aligner mfa train ...` or
-   activate the env first) — not Colab, MFA already works locally.
-4. Expect a long run (many hours) — start it and let it run in the background,
-   don't wait on it live.
+4. Keep `temporary_directory` on D: (already supported in `src/align.py` and used
+   by every `align_batch*.yaml`) — **do not skip this**, C: has ~10GB free.
+5. Run via the local `aligner` conda env — not Colab, MFA already works locally.
+6. Then re-run Phase 4-5 on the full output.
 
-Do not skip ahead to Phase 6 (TTS fine-tuning) before Phases 3-5 are done.
+### Phase 4-5 rerun on all 18 chapters (2026-07-27)
+
+`batch2` added to `configs/qc_filter.yaml` and QC re-run with thresholds held
+**fixed** from the batch0/1/3 fit — batch2 was treated as a genuine held-out
+test, not re-tuned on. They generalised: batch2 passed at 76.0%, in line with
+the other three batches (70.6-84.1%), and ROM_008/EPH_004 (the two chapters
+flagged for segmentation damage) were not standout outliers post-QC —
+comparable to MAT_010/MAT_001, which have no known segmentation issue. QC is
+catching the bad segments as intended; thresholds did not need retuning.
+
+Overall: **690/915 pass (75.4%), 1.34h kept of 2.06h.**
+
+`configs/tts_dataset.yaml`'s `val_chapters` gained `GAL_001` (clean, 83.9% QC
+pass) alongside the existing `LUK_005`/`REV_021`, so validation now covers one
+clean chapter per register (epistle/Gospel/apocalyptic) rather than lacking
+epistles entirely. ROM_008/EPH_004 were deliberately excluded from validation
+— their segmentation damage would make the val metric noisy, not
+representative; they stay in training where QC filters their bad segments.
+
+Rebuilt `data/processed/tts_dataset/` (gitignored, licensed content): **690
+clips / 1.37h**, split 554 train (1.12h) / 136 validation (0.26h) — up from
+the previous 472-clip/0.88h prototype. Still well short of what full Phase 3
+will produce; **not** yet suitable to replace the running Colab prototype
+fine-tune. Its value here was validating that the QC thresholds hold on a
+wider, more varied sample before the full 260-chapter run.
+
+Do not skip ahead to Phase 6 (TTS fine-tuning) before Phases 3-5 are done on
+the full corpus.
 
 ### Phase 6 environment (validated 2026-07-27)
 
@@ -436,8 +521,8 @@ counts, not epochs (~20x the clips).
 | Week 5a | MFA alignment — Mark pilot (16 ch) | ✅ Done but flawed — 233/288 (81%), superseded below |
 | Week 5b | Phoneme G2P dictionary (roadmap Phase 1) | ✅ Done — 98.9% coverage, ~50-phone inventory |
 | Week 5c | Segment chapters into per-sentence clips (roadmap Phase 2) | 🔄 In progress — ran full 260-chapter pass locally, check `segmentation_report.csv` |
-| Week 5d | Align segments with MFA (roadmap Phase 3) | 🔄 Partial — 12/15 verification chapters done (89–91%); **full 260-chapter run still todo**, run locally via `aligner` conda env, not Colab |
-| Week 5e | QC filtering + build tts_dataset/metadata.csv (roadmap Phase 4–5) | ✅ Scripts done and run on the 12-chapter sample — 472/628 pass QC (75%), 0.88h dataset. Must be re-run after the full Phase 3 |
+| Week 5d | Align segments with MFA (roadmap Phase 3) | 🔄 Verification complete — all 4 batches, 18 chapters, 810/915 = 88.5%; **full 260-chapter run still todo** (~2.5 days single-threaded, test `--single_speaker` first), run locally via `aligner` conda env, not Colab |
+| Week 5e | QC filtering + build tts_dataset/metadata.csv (roadmap Phase 4–5) | 🔄 Re-run on all 18 verification chapters (batch2 added) — 690/915 pass QC (75.4%), 1.37h dataset, thresholds held fixed and generalised without retuning. Must be re-run again after the full Phase 3 |
 | Week 6 | MMS TTS fine-tuning from mms-tts-**mai** (roadmap Phase 6) | 🔄 Running — prototype fine-tune launched 2026-07-27 on the 0.88h dataset, 9,000 steps / ~3h18m on a Colab T4. Pipeline validated end to end |
 | Week 7–8 | Evaluation (roadmap Phase 7–8) + report + release | 🔲 Todo |
 
