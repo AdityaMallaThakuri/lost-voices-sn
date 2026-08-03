@@ -124,6 +124,29 @@ A simple 90/10 random split with seed 42.
 
 The test set is **held out** — never used as input to any training script, only for evaluation.
 
+### Limitations
+
+- **The split leaks, and the leak is measurable.** Scripture is formulaic, and
+  `split_corpus.py` shuffles and splits *sentences* without deduplicating first. The corpus
+  contains **151 exact-duplicate sentences**, and **25 distinct sentences appear verbatim in
+  both `train.txt` and `test.txt`**, covering 26 of the 1,574 test rows (1.65%). Near-duplicates
+  — verses differing by a name or a particle — are not counted here and can only make it worse.
+  Every held-out number in this document (SunuwarBERT's perplexity, both OOV rates) is therefore
+  **optimistic by an unmeasured margin**. The correct remedy is a chapter-level split, holding
+  out whole chapters so adjacent verses cannot straddle the boundary — which is exactly what the
+  TTS half of this project already does (`configs/tts_dataset.yaml`, `val_chapters`). It is not
+  applied here because changing the split invalidates every model in `models/`, and retraining
+  is outside this project's compute budget. Book/chapter provenance is also discarded during
+  preprocessing, so a correct split needs `preprocess_text.py` to record it first.
+- **The committed corpus is not the one the models were trained on.**
+  `data/raw/sunuwar_nt_raw.txt` in this repository has 15,737 sentences / 179,915 tokens /
+  13,123 types, while `results/corpus_stats.json` and the committed split both describe a
+  snapshot with 15,738 / 179,918 / 13,124. Re-running `split_corpus.py` on the committed corpus
+  today produces 14,163 / 1,574 and does not reproduce either committed file. The exact snapshot
+  is not recoverable. See `drift_note` in `results/corpus_stats.json`;
+  `tests/test_corpus_integrity.py` pins all six numbers so the discrepancy cannot drift further
+  unnoticed.
+
 ---
 
 ## Step 3 — SentencePiece Tokeniser (`src/train_spm.py`)
