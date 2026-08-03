@@ -9,6 +9,7 @@ exercise the code paths.
 """
 
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,19 @@ SYNTHETIC_SENTENCES = [
 @pytest.fixture(scope="session")
 def synthetic_sentences() -> list[str]:
     return list(SYNTHETIC_SENTENCES)
+
+
+@pytest.fixture
+def scratch_dir():
+    """A throwaway directory.
+
+    Deliberately not pytest's `tmp_path`: its per-user base directory can be
+    left with an ACL that denies access on Windows, which makes every test
+    using it error out with PermissionError for reasons that have nothing to
+    do with this repository. `tempfile` sidesteps the shared base entirely.
+    """
+    with tempfile.TemporaryDirectory(prefix="lost-voices-test-") as path:
+        yield Path(path)
 
 
 @pytest.fixture(scope="session")

@@ -249,6 +249,17 @@ high morphological variation.
 vocabulary. This is expected — with only ~180K training tokens, many inflected forms appear
 only once and fall below `min_count=2`. fastText's character n-grams reduce this to 19.9%.
 
+**Caveat — the 30.9% → 19.9% comparison is confounded and the two rates measure different
+things.** fastText is trained with `min_count: 1` and word2vec with `min_count: 2`
+(`configs/fasttext.yaml` vs `configs/word2vec.yaml`), so fastText simply keeps more word types
+in its vocabulary; how much of the gap that alone explains has not been measured here, and the
+gap cannot be attributed to subword n-grams until `min_count` is held equal. Separately,
+*vocabulary membership is the wrong quantity for fastText* — n-grams synthesise a vector for
+any word, so its **effective** OOV rate is near 0%, which is what the target table in
+`claude.md` actually asks for. `src/evaluate_nlp.py` now reports `vocab_oov_rate` and
+`effective_oov_rate` as separate fields and prints each model's `min_count` beside its scores,
+so the comparison is auditable.
+
 **Genre F1 interpretation:** The three-class task (narrative / epistolary / apocalyptic)
 scores ~0.25 for all models, which is **below the random baseline of 0.33**. This is not
 surprising — averaged embeddings are a very weak representation for document-level genre
