@@ -3,17 +3,9 @@
 # Do not redistribute raw text. Models trained on this data may be released.
 
 import sys
-import types
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
-
-# Stub wandb so train_mlm imports without wandb installed
-_wandb_stub = types.ModuleType("wandb")
-_wandb_stub.init   = lambda **kw: None
-_wandb_stub.log    = lambda d: None
-_wandb_stub.finish = lambda: None
-sys.modules.setdefault("wandb", _wandb_stub)
 
 import os
 import torch

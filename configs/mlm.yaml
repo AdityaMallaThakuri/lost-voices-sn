@@ -37,5 +37,15 @@ monitor_metric: val_perplexity
 checkpoint_path: models/sunuwar_transformer.pt
 
 # Wandb
+# wandb_mode: online | offline | disabled
+#   offline  — logs to ./wandb/ (gitignored); no account, login or network
+#              needed. `wandb sync <run-dir>` uploads it afterwards, so metrics
+#              are kept, not lost. This is the default because claude.md
+#              requires every script to run end-to-end in Colab, and a fresh
+#              runtime has no credentials.
+#   online   — streams to wandb.ai. Needs `wandb login` first, or init raises
+#              "UsageError: No API key configured".
+#   disabled — wandb is never imported at all.
+wandb_mode: offline
 wandb_project: lost-voices-sunuwar
 wandb_run_name: sunuwarBERT-small-v1

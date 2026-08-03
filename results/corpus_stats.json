@@ -7,5 +7,13 @@
   "median_sentence_length": 10.0,
   "pct_devanagari_zwj": 97.92,
   "train_sentences": 14164,
-  "test_sentences": 1574
+  "test_sentences": 1574,
+
+  "committed_corpus_sentences": 15737,
+  "committed_corpus_tokens": 179915,
+  "committed_corpus_types": 13123,
+  "corpus_exact_duplicates": 151,
+  "train_test_exact_overlap": 25,
+
+  "drift_note": "The first block describes the corpus snapshot the released models were trained on. The committed_corpus_* figures describe data/raw/sunuwar_nt_raw.txt as it exists in this repository, and they disagree: the trained-on snapshot had one more sentence (15738 vs 15737), three more tokens and one more word type. train.txt (14164) + test.txt (1574) = 15738 agrees with the trained-on snapshot, not with the file on disk, so the split and the stats are mutually consistent and both differ from the committed corpus. Consequence: re-running src/split_corpus.py on the committed corpus today yields 14163/1574 and neither output is identical to the committed split, so the pipeline no longer reproduces its own released artefacts from its own released input. The exact snapshot is not recoverable. These numbers are recorded rather than repaired because regenerating the corpus and the split would invalidate every trained model in models/, none of which can be retrained within this project's compute budget. corpus_exact_duplicates counts repeated sentence occurrences in the committed corpus: 151 lines are a verbatim repeat of an earlier line, involving 132 distinct sentence strings. train_test_exact_overlap counts distinct sentence strings appearing verbatim in both train.txt and test.txt: 25 strings, covering 26 of the 1574 test rows (1.65%). split_corpus.py shuffles and splits without deduplicating, so that overlap is direct train/test contamination and makes the reported perplexity and OOV rates optimistic. See NLP_PIPELINE.md Step 2 (Limitations); the remedy requires retraining. Verified by tests/test_corpus_integrity.py."
 }

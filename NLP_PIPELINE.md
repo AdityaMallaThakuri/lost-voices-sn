@@ -124,6 +124,29 @@ A simple 90/10 random split with seed 42.
 
 The test set is **held out** — never used as input to any training script, only for evaluation.
 
+### Limitations
+
+- **The split leaks, and the leak is measurable.** Scripture is formulaic, and
+  `split_corpus.py` shuffles and splits *sentences* without deduplicating first. The corpus
+  contains **151 exact-duplicate sentences**, and **25 distinct sentences appear verbatim in
+  both `train.txt` and `test.txt`**, covering 26 of the 1,574 test rows (1.65%). Near-duplicates
+  — verses differing by a name or a particle — are not counted here and can only make it worse.
+  Every held-out number in this document (SunuwarBERT's perplexity, both OOV rates) is therefore
+  **optimistic by an unmeasured margin**. The correct remedy is a chapter-level split, holding
+  out whole chapters so adjacent verses cannot straddle the boundary — which is exactly what the
+  TTS half of this project already does (`configs/tts_dataset.yaml`, `val_chapters`). It is not
+  applied here because changing the split invalidates every model in `models/`, and retraining
+  is outside this project's compute budget. Book/chapter provenance is also discarded during
+  preprocessing, so a correct split needs `preprocess_text.py` to record it first.
+- **The committed corpus is not the one the models were trained on.**
+  `data/raw/sunuwar_nt_raw.txt` in this repository has 15,737 sentences / 179,915 tokens /
+  13,123 types, while `results/corpus_stats.json` and the committed split both describe a
+  snapshot with 15,738 / 179,918 / 13,124. Re-running `split_corpus.py` on the committed corpus
+  today produces 14,163 / 1,574 and does not reproduce either committed file. The exact snapshot
+  is not recoverable. See `drift_note` in `results/corpus_stats.json`;
+  `tests/test_corpus_integrity.py` pins all six numbers so the discrepancy cannot drift further
+  unnoticed.
+
 ---
 
 ## Step 3 — SentencePiece Tokeniser (`src/train_spm.py`)
@@ -225,6 +248,17 @@ high morphological variation.
 **OOV interpretation:** 30.9% of unique word types in the test set are not in the word2vec
 vocabulary. This is expected — with only ~180K training tokens, many inflected forms appear
 only once and fall below `min_count=2`. fastText's character n-grams reduce this to 19.9%.
+
+**Caveat — the 30.9% → 19.9% comparison is confounded and the two rates measure different
+things.** fastText is trained with `min_count: 1` and word2vec with `min_count: 2`
+(`configs/fasttext.yaml` vs `configs/word2vec.yaml`), so fastText simply keeps more word types
+in its vocabulary; how much of the gap that alone explains has not been measured here, and the
+gap cannot be attributed to subword n-grams until `min_count` is held equal. Separately,
+*vocabulary membership is the wrong quantity for fastText* — n-grams synthesise a vector for
+any word, so its **effective** OOV rate is near 0%, which is what the target table in
+`claude.md` actually asks for. `src/evaluate_nlp.py` now reports `vocab_oov_rate` and
+`effective_oov_rate` as separate fields and prints each model's `min_count` beside its scores,
+so the comparison is auditable.
 
 **Genre F1 interpretation:** The three-class task (narrative / epistolary / apocalyptic)
 scores ~0.25 for all models, which is **below the random baseline of 0.33**. This is not
