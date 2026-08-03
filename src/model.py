@@ -37,6 +37,17 @@ class SunuwarTokeniser:
         self.cls_id = 2
         self.sep_id = 3
         self.mask_id = self.sp.piece_to_id("[MASK]")
+        # piece_to_id returns the unknown id for a piece the model does not
+        # define, so a tokeniser trained without [MASK] in user_defined_symbols
+        # yields mask_id == unk_id and apply_mlm_mask then stamps <unk> over 80%
+        # of selected positions — silently, with no error and no NaN to notice.
+        if self.mask_id == self.sp.unk_id():
+            raise ValueError(
+                f"{model_path} defines no [MASK] piece: piece_to_id('[MASK]') "
+                f"returned the unknown id ({self.mask_id}). Masking would train "
+                "on <unk> instead. Retrain the tokeniser with [MASK] in "
+                "user_defined_symbols (see configs/spm.yaml)."
+            )
 
     @property
     def piece_size(self) -> int:

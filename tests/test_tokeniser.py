@@ -69,7 +69,38 @@ def test_special_ids_are_the_ones_the_checkpoint_was_trained_with(tokeniser):
     assert tokeniser.sep_id == 3
     assert tokeniser.sp.id_to_piece(2) == "<s>"
     assert tokeniser.sp.id_to_piece(3) == "</s>"
-    assert tokeniser.mask_id == tokeniser.sp.piece_to_id("[MASK]")
+
+    # Pinned to the literal id, not to piece_to_id("[MASK]") — that comparison
+    # holds by construction and would still pass if the piece were missing and
+    # the id had silently fallen back to <unk>.
+    assert tokeniser.mask_id == 4
+    assert tokeniser.sp.id_to_piece(4) == "[MASK]"
+    assert tokeniser.mask_id != tokeniser.unk_id
+
+
+def test_a_tokeniser_without_a_mask_piece_is_rejected():
+    """SentencePiece resolves an unknown piece to the unk id rather than
+    raising, so a model trained without [MASK] in user_defined_symbols would
+    otherwise mask with <unk> and train to completion without complaint."""
+    import model as model_module
+
+    class _NoMaskProcessor:
+        def Load(self, path):
+            pass
+
+        def piece_to_id(self, piece):
+            return 1  # what real SentencePiece returns for a missing piece
+
+        def unk_id(self):
+            return 1
+
+    original = model_module.spm.SentencePieceProcessor
+    model_module.spm.SentencePieceProcessor = _NoMaskProcessor
+    try:
+        with pytest.raises(ValueError, match=r"\[MASK\]"):
+            model_module.SunuwarTokeniser("fake.model", vocab_size=8000, max_seq_len=128)
+    finally:
+        model_module.spm.SentencePieceProcessor = original
 
 
 def test_piece_size_is_smaller_than_the_configured_vocab_size(tokeniser):
