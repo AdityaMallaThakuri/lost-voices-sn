@@ -143,10 +143,21 @@ def test_min_count_is_readable_off_the_model():
 # Retained from the deleted import-time block
 # ---------------------------------------------------------------------------
 
-def test_module_imports_without_touching_the_filesystem():
-    """The point of item 4a: importing must not load a model or read a corpus."""
+def test_module_imports_without_touching_the_filesystem(scratch_dir, monkeypatch):
+    """The point of item 4a: importing must not load a model or read a corpus.
+
+    Reloaded from a directory where none of the old hardcoded relative paths
+    resolve. Run from the repo root this assertion cannot fail — `models/…` and
+    `data/processed/…` are right there, so a restored import-time block would
+    load successfully and the test would still pass.
+
+    `scratch_dir` is requested before `monkeypatch` on purpose: fixtures finalise
+    in reverse order of setup, so this way the chdir is undone before the
+    directory is removed. Windows refuses to delete the process's own cwd.
+    """
     import importlib
 
+    monkeypatch.chdir(scratch_dir)
     importlib.reload(evaluate_nlp)
     assert hasattr(evaluate_nlp, "main")
 
