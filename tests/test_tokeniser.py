@@ -55,6 +55,44 @@ def test_encode_never_exceeds_max_seq_len(tokeniser):
     assert len(ids) == tokeniser.max_seq_len
 
 
+def test_truncation_drops_sep_and_that_is_the_trained_behaviour(tokeniser):
+    """Characterisation, not an endorsement.
+
+    encode() slices after appending [SEP], so a full-length sequence ends on a
+    content piece with no terminator. Kept because this is the encode the
+    released checkpoint was trained through; asserted so it is a recorded
+    property rather than an invisible one.
+    """
+    ids = tokeniser.encode(" ".join(SYNTHETIC_ZWJ_WORDS * 200))
+
+    assert len(ids) == tokeniser.max_seq_len
+    assert ids[0] == tokeniser.cls_id
+    assert ids[-1] != tokeniser.sep_id, "truncation behaviour changed — see docstring"
+    assert tokeniser.sep_id not in ids
+
+
+def test_the_corpus_cannot_reach_the_truncation_branch(tokeniser):
+    """Why the above is tolerable: 128 is far clear of the longest sentence.
+
+    Measured over train.txt, test.txt and sunuwar_nt_raw.txt, the longest is 68
+    pieces (70 with [CLS]/[SEP]). Skips when the corpus is absent.
+    """
+    from conftest import DATA_PROCESSED
+
+    corpus = DATA_PROCESSED / "train.txt"
+    if not corpus.exists():
+        pytest.skip("corpus not present — data/ is CC BY-NC-ND and may be untracked")
+
+    longest = max(
+        len(tokeniser.sp.encode(line.strip()))
+        for line in corpus.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    )
+
+    assert longest == 68
+    assert longest + 2 < tokeniser.max_seq_len
+
+
 def test_special_ids_are_the_ones_the_checkpoint_was_trained_with(tokeniser):
     """These are load-bearing for models/sunuwar_transformer.pt.
 

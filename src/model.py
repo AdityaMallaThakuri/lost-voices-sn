@@ -63,6 +63,19 @@ class SunuwarTokeniser:
         return self.sp.get_piece_size()
 
     def encode(self, text: str) -> list[int]:
+        """Encode to ids wrapped in [CLS] … [SEP], truncated to max_seq_len.
+
+        Truncation is applied *after* [SEP] is appended, so any text longer
+        than `max_seq_len - 2` pieces comes back ending on a content piece with
+        no terminator. That is deliberate: this is the encode the released
+        checkpoint was trained through, and the branch cannot fire on the
+        corpus — the longest sentence in train.txt, test.txt or
+        sunuwar_nt_raw.txt is 68 pieces (70 with specials) against a
+        max_seq_len of 128, i.e. 58 pieces of headroom. Only arbitrary user
+        input via app.py or `demo_mlm.py --sentence` can reach it. Pinned by
+        tests/test_tokeniser.py rather than changed, since re-appending [SEP]
+        would alter tokenisation for a case the trained model never saw.
+        """
         ids = self.sp.encode(text)
         ids = [self.cls_id] + ids + [self.sep_id]
         return ids[:self.max_seq_len]
