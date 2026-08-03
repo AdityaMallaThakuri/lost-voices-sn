@@ -33,6 +33,18 @@ if str(SRC) not in sys.path:
 # Synthetic Devanagari — NOT corpus text
 # ---------------------------------------------------------------------------
 
+ZWJ = "‍"
+
+# Written with explicit ‍ escapes because the character is invisible: each
+# of these is a virama + ZWJ + consonant, which is exactly how ZWJ occurs in
+# the real corpus (54,692 times). claude.md requires it be preserved end to end,
+# so it must be visible in the source of the test that checks for it.
+SYNTHETIC_ZWJ_WORDS = [
+    "बाक्" + ZWJ + "ता",
+    "सुक्" + ZWJ + "चा",
+    "मप्रोंइ" + ZWJ + "थु",
+]
+
 # U+200D ZWJ appears inside two of these, between a virama and the following
 # consonant, which is exactly how it occurs in the real corpus (54,692 times).
 # claude.md requires it be preserved end to end.

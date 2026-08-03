@@ -1,0 +1,11 @@
+# Development-only dependencies. Install on top of requirements.txt:
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+# Run the suite from the repository root:
+#   python -m pytest tests/ -q
+#
+# The tests are CPU-only and need no trained checkpoint and no corpus text.
+# Anything that does need an artefact (the SentencePiece model, data/processed/)
+# calls pytest.skip with a reason rather than failing.
+
+pytest>=8.0
