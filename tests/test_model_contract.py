@@ -14,6 +14,7 @@ if the architecture moves.
 
 import json
 import math
+import re
 
 import pytest
 import yaml
@@ -107,12 +108,22 @@ def test_forward_pass_produces_vocab_size_logits(mlm_config):
 
 
 def test_model_py_is_the_only_definition_of_sunuwarbert():
-    """The whole point of the extraction: no second copy may reappear."""
+    """The whole point of the extraction: no second copy may reappear.
+
+    Recursive, because `glob("*.py")` only sees the top level and a copy in
+    `src/<package>/foo.py` would pass silently — the one direction where this
+    tripwire could report all-clear while the drift it exists to catch is back.
+    Paths are reported relative to src/ rather than by bare filename, so a
+    nested `src/<package>/model.py` is distinguishable from the real one.
+
+    Matched at the start of a line so a mention in a comment or docstring is
+    not counted as a definition.
+    """
     from conftest import SRC
 
     definers = sorted(
-        path.name
-        for path in SRC.glob("*.py")
-        if "class SunuwarBERT" in path.read_text(encoding="utf-8")
+        path.relative_to(SRC).as_posix()
+        for path in SRC.rglob("*.py")
+        if re.search(r"^class SunuwarBERT\b", path.read_text(encoding="utf-8"), re.M)
     )
     assert definers == ["model.py"], f"SunuwarBERT is defined in {definers}"
