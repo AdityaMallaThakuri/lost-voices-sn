@@ -1,6 +1,7 @@
 # Data source: Sunuwar Bible (suzBl), © 2011 Wycliffe Bible Translators, Inc.
 # Licence: CC BY-NC-ND 4.0 — non-commercial research use only
 
+import os
 import sys
 import math
 import warnings
@@ -10,8 +11,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
-import sentencepiece as spm
 import streamlit as st
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from model import SunuwarBERT, SunuwarTokeniser, apply_mlm_mask  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Page config — must be first Streamlit call
@@ -21,47 +24,6 @@ st.set_page_config(
     page_icon="🏔️",
     layout="wide",
 )
-
-# ---------------------------------------------------------------------------
-# Model classes (self-contained, no wandb)
-# ---------------------------------------------------------------------------
-
-class SunuwarTokeniser:
-    def __init__(self, model_path: str, vocab_size: int, max_seq_len: int):
-        self.sp = spm.SentencePieceProcessor()
-        self.sp.Load(model_path)
-        self.vocab_size  = vocab_size
-        self.max_seq_len = max_seq_len
-        self.pad_id  = 0
-        self.unk_id  = 1
-        self.cls_id  = 2
-        self.sep_id  = 3
-        self.mask_id = self.sp.piece_to_id("[MASK]")
-
-    def encode(self, text: str) -> list:
-        ids = self.sp.encode(text)
-        return ([self.cls_id] + ids + [self.sep_id])[:self.max_seq_len]
-
-
-class SunuwarBERT(nn.Module):
-    def __init__(self, config: dict):
-        super().__init__()
-        self.embedding     = nn.Embedding(config["vocab_size"], config["hidden_dim"], padding_idx=0)
-        self.pos_embedding = nn.Embedding(config["max_seq_len"], config["hidden_dim"])
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=config["hidden_dim"], nhead=config["num_heads"],
-            dim_feedforward=config["ffn_dim"], dropout=config["dropout"],
-            activation=config["activation"], batch_first=True,
-        )
-        self.encoder  = nn.TransformerEncoder(encoder_layer, num_layers=config["num_layers"])
-        self.mlm_head = nn.Linear(config["hidden_dim"], config["vocab_size"])
-
-    def forward(self, input_ids, attention_mask):
-        seq_len = input_ids.size(1)
-        pos_ids = torch.arange(seq_len, device=input_ids.device).unsqueeze(0)
-        x = self.embedding(input_ids) + self.pos_embedding(pos_ids)
-        x = self.encoder(x, src_key_padding_mask=(attention_mask == 0))
-        return self.mlm_head(x)
 
 
 class SunuwarMLMDataset(torch.utils.data.Dataset):
@@ -83,21 +45,6 @@ def make_dataloader(dataset, tokeniser, batch_size=32):
         padded  = [torch.cat([t, torch.full((max_len - t.size(0),), tokeniser.pad_id, dtype=torch.long)]) for t in batch]
         return torch.stack(padded)
     return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=collate)
-
-
-def apply_mlm_mask(input_ids, tokeniser, mlm_probability=0.15, mask_ratio=0.8, random_ratio=0.1):
-    masked_ids = input_ids.clone()
-    labels     = torch.full_like(input_ids, -100)
-    eligible   = (input_ids != tokeniser.pad_id) & (input_ids != tokeniser.cls_id) & (input_ids != tokeniser.sep_id)
-    rand       = torch.rand_like(input_ids, dtype=torch.float)
-    selected   = eligible & (rand < mlm_probability)
-    labels[selected] = input_ids[selected]
-    split      = torch.rand_like(input_ids, dtype=torch.float)
-    masked_ids[selected & (split < mask_ratio)] = tokeniser.mask_id
-    to_random  = selected & (split >= mask_ratio) & (split < mask_ratio + random_ratio)
-    if to_random.any():
-        masked_ids[to_random] = torch.randint(4, tokeniser.vocab_size, (to_random.sum().item(),))
-    return masked_ids, labels, (input_ids != tokeniser.pad_id).long()
 
 
 # ---------------------------------------------------------------------------
