@@ -10,12 +10,53 @@ import torch
 import torch.nn as nn
 import torch.utils.data
 import numpy as np
-import wandb
 import yaml
 from transformers import get_linear_schedule_with_warmup
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model import SunuwarBERT, SunuwarTokeniser, apply_mlm_mask  # noqa: E402
+
+DEFAULT_CONFIG_PATH = "configs/mlm.yaml"
+WANDB_MODES = ("online", "offline", "disabled")
+
+
+def amp_enabled(config: dict, device: torch.device) -> bool:
+    """Whether mixed precision should actually be on.
+
+    `fp16: true` with no GPU used to hand `torch.autocast` a CPU device type.
+    That does not raise — PyTorch warns and silently falls back to bfloat16 —
+    so the config claimed fp16 while the run did something else. Gate on the
+    device so the two agree.
+    """
+    return bool(config.get("fp16", False)) and device.type == "cuda"
+
+
+def init_wandb(config: dict):
+    """Honour `wandb_mode` (online / offline / disabled) before touching wandb.
+
+    Returns the wandb module, or None when logging is disabled. wandb is
+    imported lazily so `import train_mlm` — which src/demo.py and
+    src/smoke_test.py do — never requires the package or a login. Those two
+    scripts used to monkey-patch a stub module into sys.modules for exactly
+    this reason.
+    """
+    mode = str(config.get("wandb_mode", "online")).lower()
+    if mode not in WANDB_MODES:
+        raise ValueError(f"wandb_mode must be one of {WANDB_MODES}, got {mode!r}")
+
+    if mode == "disabled":
+        print("wandb: disabled by config")
+        return None
+
+    import wandb
+
+    wandb.init(
+        project=config["wandb_project"],
+        name=config["wandb_run_name"],
+        config=config,
+        mode=mode,
+    )
+    return wandb
 
 
 class SunuwarMLMDataset(torch.utils.data.Dataset):
@@ -61,15 +102,17 @@ def train_one_epoch(
     tokeniser: SunuwarTokeniser,
     config: dict,
     device: torch.device,
-    scaler: torch.cuda.amp.GradScaler,
-) -> float:
+    scaler: torch.amp.GradScaler,
+) -> tuple[float, int]:
     model.train()
     loss_fn  = nn.CrossEntropyLoss(ignore_index=-100)
-    fp16     = config.get("fp16", False)
+    use_amp  = amp_enabled(config, device)
     grad_acc = config["grad_accumulation_steps"]
 
-    total_loss   = 0.0
-    batch_count  = 0
+    total_loss    = 0.0
+    batch_count   = 0
+    skipped       = 0
+    pending_grads = False
     optimiser.zero_grad()
 
     for step, batch in enumerate(dataloader):
@@ -85,7 +128,16 @@ def train_one_epoch(
         labels         = labels.to(device)
         attention_mask = attention_mask.to(device)
 
-        with torch.autocast(device_type=device.type, enabled=fp16):
+        # CrossEntropyLoss(ignore_index=-100) over an all-ignored target is a
+        # 0/0 mean: it returns NaN, and one NaN backward poisons every weight.
+        # Vanishingly unlikely at batch_size 32, ~1 in 1,250 batches at the
+        # small batch sizes used for smoke tests.
+        n_masked = int((labels != -100).sum().item())
+        if n_masked == 0:
+            skipped += 1
+            continue
+
+        with torch.autocast(device_type=device.type, enabled=use_amp):
             logits = model(masked_ids, attention_mask)
             # logits: (B, T, V) → reshape to (B*T, V); labels: (B, T) → (B*T,)
             loss = loss_fn(
@@ -95,6 +147,7 @@ def train_one_epoch(
             loss = loss / grad_acc
 
         scaler.scale(loss).backward()
+        pending_grads = True
         total_loss  += loss.item() * grad_acc
         batch_count += 1
 
@@ -105,9 +158,12 @@ def train_one_epoch(
             scaler.update()
             scheduler.step()
             optimiser.zero_grad()
+            pending_grads = False
 
-    # Flush any remaining accumulated gradients at epoch end
-    if batch_count % grad_acc != 0:
+    # Flush any remaining accumulated gradients at epoch end. Keyed on whether
+    # gradients are actually pending, not on the batch count — a skipped
+    # degenerate batch would otherwise desynchronise the two.
+    if pending_grads:
         scaler.unscale_(optimiser)
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         scaler.step(optimiser)
@@ -115,7 +171,8 @@ def train_one_epoch(
         scheduler.step()
         optimiser.zero_grad()
 
-    return total_loss / batch_count if batch_count else 0.0
+    mean_loss = total_loss / batch_count if batch_count else 0.0
+    return mean_loss, skipped
 
 
 def evaluate(
@@ -124,12 +181,32 @@ def evaluate(
     tokeniser: SunuwarTokeniser,
     config: dict,
     device: torch.device,
-) -> tuple[float, float]:
+) -> tuple[float, float, int]:
+    """Held-out MLM loss and perplexity.
+
+    Two properties this loop needs and previously lacked:
+
+    * **Fixed masking.** The mask used to be re-drawn from the global RNG on
+      every call, so consecutive epochs were scored on different held-out
+      targets. On ~2,600 masked tokens the sampling spread is comparable to
+      the gap between the reported best (14.79 at epoch 30) and the value that
+      triggered early stopping (15.60 at epoch 35) — i.e. the stopping
+      decision was partly noise. A generator re-seeded identically before
+      every pass makes the evaluation set genuinely held *fixed*.
+    * **Token weighting.** Averaging per-batch means over-weights batches with
+      few masked tokens. Perplexity is a per-token quantity, so weight each
+      batch by its masked-token count.
+    """
     model.eval()
-    loss_fn     = nn.CrossEntropyLoss(ignore_index=-100)
-    fp16        = config.get("fp16", False)
-    total_loss  = 0.0
-    batch_count = 0
+    loss_fn      = nn.CrossEntropyLoss(ignore_index=-100)
+    use_amp      = amp_enabled(config, device)
+
+    generator = torch.Generator(device=device)
+    generator.manual_seed(config["seed"])
+
+    total_loss   = 0.0
+    total_masked = 0
+    skipped      = 0
 
     with torch.no_grad():
         for batch in dataloader:
@@ -140,24 +217,30 @@ def evaluate(
                 mlm_probability=config["mlm_probability"],
                 mask_ratio=config["mask_ratio"],
                 random_ratio=config["random_ratio"],
+                generator=generator,
             )
             masked_ids     = masked_ids.to(device)
             labels         = labels.to(device)
             attention_mask = attention_mask.to(device)
 
-            with torch.autocast(device_type=device.type, enabled=fp16):
+            n_masked = int((labels != -100).sum().item())
+            if n_masked == 0:
+                skipped += 1
+                continue
+
+            with torch.autocast(device_type=device.type, enabled=use_amp):
                 logits = model(masked_ids, attention_mask)
                 loss   = loss_fn(
                     logits.view(-1, logits.size(-1)),
                     labels.view(-1),
                 )
 
-            total_loss  += loss.item()
-            batch_count += 1
+            total_loss   += loss.item() * n_masked
+            total_masked += n_masked
 
-    mean_loss   = total_loss / batch_count if batch_count else 0.0
+    mean_loss   = total_loss / total_masked if total_masked else 0.0
     perplexity  = math.exp(mean_loss)
-    return mean_loss, perplexity
+    return mean_loss, perplexity, skipped
 
 
 def probe_predictions(
@@ -189,8 +272,11 @@ def probe_predictions(
 
 
 def main():
-    with open("configs/mlm.yaml", encoding="utf-8") as f:
+    # claude.md: "All scripts accept a YAML config file as first argument"
+    config_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CONFIG_PATH
+    with open(config_path, encoding="utf-8") as f:
         config = yaml.safe_load(f)
+    print(f"Config: {config_path}")
 
     seed = config["seed"]
     random.seed(seed)
@@ -198,11 +284,7 @@ def main():
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-    wandb.init(
-        project=config["wandb_project"],
-        name=config["wandb_run_name"],
-        config=config,
-    )
+    run = init_wandb(config)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
@@ -226,16 +308,25 @@ def main():
         weight_decay=config["weight_decay"],
     )
 
-    grad_acc     = config["grad_accumulation_steps"]
-    total_steps  = config["epochs"] * len(train_loader) // grad_acc
-    warmup_steps = int(config["warmup_ratio"] * total_steps)
+    grad_acc = config["grad_accumulation_steps"]
+    # train_one_epoch flushes leftover gradients at the end of every epoch, so
+    # a partial accumulation group still costs one scheduler step. Floor
+    # division dropped it and under-ran the schedule (11,075 vs 11,100 steps
+    # over the configured 100 epochs), pinning the LR at 0 before the end.
+    steps_per_epoch = math.ceil(len(train_loader) / grad_acc)
+    total_steps     = config["epochs"] * steps_per_epoch
+    warmup_steps    = int(config["warmup_ratio"] * total_steps)
     scheduler = get_linear_schedule_with_warmup(
         optimiser,
         num_warmup_steps=warmup_steps,
         num_training_steps=total_steps,
     )
+    print(
+        f"Schedule: {steps_per_epoch} optimiser steps/epoch × {config['epochs']} epochs "
+        f"= {total_steps} total ({warmup_steps} warmup)"
+    )
 
-    scaler = torch.amp.GradScaler('cuda', enabled=config.get("fp16", False))
+    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled(config, device))
 
     with open(config["test_path"], encoding="utf-8") as f:
         probe_sentences = [f.readline().strip() for _ in range(3)]
@@ -246,10 +337,10 @@ def main():
     patience         = config["early_stopping_patience"]
 
     for epoch in range(1, config["epochs"] + 1):
-        train_loss = train_one_epoch(
+        train_loss, train_skipped = train_one_epoch(
             model, train_loader, optimiser, scheduler, tokeniser, config, device, scaler,
         )
-        val_loss, val_perplexity = evaluate(
+        val_loss, val_perplexity, val_skipped = evaluate(
             model, val_loader, tokeniser, config, device,
         )
 
@@ -259,14 +350,22 @@ def main():
             f"val_loss {val_loss:.4f} | "
             f"val_perplexity {val_perplexity:.2f}"
         )
+        if train_skipped or val_skipped:
+            print(
+                f"          skipped {train_skipped} train / {val_skipped} val "
+                f"batch(es) with no masked token"
+            )
         probe_predictions(model, tokeniser, probe_sentences, device)
 
-        wandb.log({
-            "epoch":          epoch,
-            "train_loss":     train_loss,
-            "val_loss":       val_loss,
-            "val_perplexity": val_perplexity,
-        })
+        if run is not None:
+            run.log({
+                "epoch":              epoch,
+                "train_loss":         train_loss,
+                "val_loss":           val_loss,
+                "val_perplexity":     val_perplexity,
+                "train_batches_skipped": train_skipped,
+                "val_batches_skipped":   val_skipped,
+            })
 
         if val_perplexity < best_perplexity:
             best_perplexity  = val_perplexity
@@ -281,7 +380,8 @@ def main():
                 break
 
     print(f"\nBest val_perplexity: {best_perplexity:.2f} at epoch {best_epoch}")
-    wandb.finish()
+    if run is not None:
+        run.finish()
 
 
 if __name__ == "__main__":

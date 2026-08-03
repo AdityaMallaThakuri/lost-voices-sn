@@ -37,5 +37,11 @@ monitor_metric: val_perplexity
 checkpoint_path: models/sunuwar_transformer.pt
 
 # Wandb
+# wandb_mode: online | offline | disabled
+#   offline  — logs to ./wandb/, no account or network needed; sync later
+#   disabled — wandb is never imported at all
+# Anything other than "online" lets the script run unauthenticated, which
+# claude.md's "every script must run end-to-end in Colab" requires.
+wandb_mode: online
 wandb_project: lost-voices-sunuwar
 wandb_run_name: sunuwarBERT-small-v1

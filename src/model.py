@@ -38,6 +38,19 @@ class SunuwarTokeniser:
         self.sep_id = 3
         self.mask_id = self.sp.piece_to_id("[MASK]")
 
+    @property
+    def piece_size(self) -> int:
+        """How many ids the tokeniser can actually emit — 6764, not `vocab_size`.
+
+        `configs/mlm.yaml` asks for 8000 and `train_spm.py` runs with
+        `hard_vocab_limit=False`, so SentencePiece settled on the 6764 pieces
+        the corpus supports. The embedding table must stay at `vocab_size`
+        (the released checkpoint has 8000 rows), but anything that *samples*
+        an id has to stay below `piece_size` or it produces tokens that can
+        never appear in real text.
+        """
+        return self.sp.get_piece_size()
+
     def encode(self, text: str) -> list[int]:
         ids = self.sp.encode(text)
         ids = [self.cls_id] + ids + [self.sep_id]
@@ -99,9 +112,26 @@ def apply_mlm_mask(
     mlm_probability: float = 0.15,
     mask_ratio: float = 0.8,
     random_ratio: float = 0.1,
+    generator: torch.Generator | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Apply the 80/10/10 MLM corruption.
+
+    `generator` — pass a seeded `torch.Generator` (on the same device as
+    `input_ids`) to make the masking reproducible. Training should leave this
+    None so every epoch sees fresh corruption; *evaluation* must pass one, or
+    the held-out perplexity is re-sampled every epoch and the curve, the
+    reported best, and the early-stopping trigger are all partly noise.
+    """
     masked_ids = input_ids.clone()
     labels     = torch.full_like(input_ids, -100)
+
+    def _rand() -> torch.Tensor:
+        return torch.rand(
+            input_ids.shape,
+            dtype=torch.float,
+            device=input_ids.device,
+            generator=generator,
+        )
 
     # Eligible positions: not [PAD]=0, [CLS]=2, [SEP]=3
     eligible = (
@@ -111,21 +141,30 @@ def apply_mlm_mask(
     )
 
     # Select 15% of eligible tokens
-    rand        = torch.rand_like(input_ids, dtype=torch.float)
+    rand        = _rand()
     selected    = eligible & (rand < mlm_probability)
 
     # Record original ids as labels at selected positions
     labels[selected] = input_ids[selected]
 
     # 80/10/10 split over selected tokens
-    split = torch.rand_like(input_ids, dtype=torch.float)
+    split = _rand()
     to_mask   = selected & (split < mask_ratio)
     to_random = selected & (split >= mask_ratio) & (split < mask_ratio + random_ratio)
     # remaining selected tokens are left unchanged
 
     masked_ids[to_mask] = tokeniser.mask_id
     if to_random.any():
-        random_tokens = torch.randint(4, tokeniser.vocab_size, (to_random.sum().item(),), device=input_ids.device)
+        # Upper bound is piece_size (6764), NOT vocab_size (8000). Ids 6764-7999
+        # exist as embedding rows but the tokeniser can never emit them, so
+        # drawing them injects noise the model will never meet in real data.
+        random_tokens = torch.randint(
+            4,
+            tokeniser.piece_size,
+            (to_random.sum().item(),),
+            device=input_ids.device,
+            generator=generator,
+        )
         masked_ids[to_random] = random_tokens
 
     # Attention mask: 1 for real tokens, 0 for padding
