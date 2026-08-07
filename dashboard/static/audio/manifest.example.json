@@ -1,0 +1,16 @@
+[
+  {
+    "text": "मिनु लिडीया आ खिं लशा बाक्‍तक।",
+    "reference": "sample1_reference.wav",
+    "synthesized": "sample1_synthesized.wav",
+    "mcd_db": 8.4,
+    "note": "Validation chapter GAL_001, clip 3"
+  },
+  {
+    "text": "तन्‍न गो इन कली लोव़ का पचा माल्‍नुङ।",
+    "reference": "sample2_reference.wav",
+    "synthesized": "sample2_synthesized.wav",
+    "mcd_db": 9.1,
+    "note": "Validation chapter LUK_005, clip 7"
+  }
+]

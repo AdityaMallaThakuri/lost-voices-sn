@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}TTS · Lost Voices{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <h1>Sunuwar TTS</h1>
+  <p class="subtitle">MMS-VITS fine-tuned from <code>facebook/mms-tts-mai</code> · single-narrator speech synthesis</p>
+  <p class="lede">Compare the original narrator's recording against the model's synthesized output for the same sentence. Audio samples are generated offline (Colab fine-tune) and dropped in here — this page does not run TTS live.</p>
+</section>
+
+{% if samples %}
+<section class="tts-grid">
+  {% for s in samples %}
+  <div class="card tts-card">
+    <h3 class="tts-text">{{ s.text }}</h3>
+    {% if s.note %}<p class="hint">{{ s.note }}</p>{% endif %}
+    <div class="tts-pair">
+      <div class="tts-slot">
+        <span class="tts-slot-label">Reference (narrator)</span>
+        <audio controls src="/static/audio/{{ s.reference }}"></audio>
+      </div>
+      <div class="tts-slot">
+        <span class="tts-slot-label">Synthesized (model)</span>
+        <audio controls src="/static/audio/{{ s.synthesized }}"></audio>
+      </div>
+    </div>
+    {% if s.mcd_db %}<p class="hint">MCD: {{ s.mcd_db }} dB</p>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% else %}
+<section class="card empty-state">
+  <h2>Audio samples coming soon</h2>
+  <p class="hint">
+    Sample pairs (reference narrator + model-synthesized audio) will appear here once added.
+    Drop files into <code>dashboard/static/audio/</code> and list them in
+    <code>dashboard/static/audio/manifest.json</code> — see
+    <code>manifest.example.json</code> in the same folder for the expected format.
+  </p>
+  <div class="tts-pair placeholder-pair">
+    <div class="tts-slot">
+      <span class="tts-slot-label">Reference (narrator)</span>
+      <div class="audio-placeholder">no file yet</div>
+    </div>
+    <div class="tts-slot">
+      <span class="tts-slot-label">Synthesized (model)</span>
+      <div class="audio-placeholder">no file yet</div>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}

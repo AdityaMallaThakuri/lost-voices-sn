@@ -62,11 +62,6 @@ CHAPTER_LINE = re.compile(r"^[०-९\d]+\.\s*$")
 MULTI_SPACE = re.compile(r" {2,}")
 
 
-def is_skip_line(text: str) -> bool:
-    t = text.strip()
-    return bool(BOOK_LINE.match(t) or CHAPTER_LINE.match(t))
-
-
 def clean_line(text: str) -> tuple[str, int]:
     """Return (cleaned text, number of digit-remnant tokens dropped)."""
     # NFC normalise
@@ -87,13 +82,14 @@ def count_words(text: str) -> int:
     return len(text.split())
 
 
-def process_file(src: Path, dst_dir: Path) -> tuple[int, int, int]:
-    """Return (words_before, words_after, digit_tokens_dropped)."""
+def process_file(src: Path, dst_dir: Path, intro_dir: Path) -> tuple[int, int, int, bool]:
+    """Return (words_before, words_after, digit_tokens_dropped, book_name_recovered)."""
     raw_lines = src.read_text(encoding="utf-8-sig").splitlines()
 
     before_words = 0
     dropped_digits = 0
     cleaned_parts = []
+    book_name = None
 
     for raw in raw_lines:
         # Files are tab-separated: line_num TAB text
@@ -101,8 +97,22 @@ def process_file(src: Path, dst_dir: Path) -> tuple[int, int, int]:
         text = parts[1] if len(parts) == 2 else parts[0]
 
         before_words += count_words(text)
+        t = text.strip()
 
-        if is_skip_line(text):
+        if BOOK_LINE.match(t):
+            # The narrator reads this aloud before the chapter's verses.
+            # Previously discarded along with the chapter-number line below;
+            # now kept as a real (not guessed) intro transcript — see
+            # segment_from_pauses.py's book-intro handling.
+            if book_name is None:
+                book_name = t.rstrip("।.॥ ").strip()
+            continue
+
+        if CHAPTER_LINE.match(t):
+            # Also spoken aloud, but only the bare digit is written here —
+            # the actual Sunuwar number word isn't recoverable from this
+            # source, so unlike the book name we can't safely reconstruct a
+            # transcript for it. Still dropped.
             continue
 
         cleaned, dropped = clean_line(text)
@@ -118,14 +128,19 @@ def process_file(src: Path, dst_dir: Path) -> tuple[int, int, int]:
     dst = dst_dir / src.name
     dst.write_text(result, encoding="utf-8")
 
-    return before_words, after_words, dropped_digits
+    if book_name:
+        (intro_dir / src.name).write_text(book_name, encoding="utf-8")
+
+    return before_words, after_words, dropped_digits, bool(book_name)
 
 
 def main(config_path: str) -> None:
     cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
     input_dir = Path(cfg["input_dir"])
     output_dir = Path(cfg["output_dir"])
+    intro_dir = Path(cfg["intro_output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
+    intro_dir.mkdir(parents=True, exist_ok=True)
 
     files = sorted(input_dir.glob("*.txt"))
     if not files:
@@ -135,22 +150,26 @@ def main(config_path: str) -> None:
     total_before = 0
     total_after = 0
     total_digits = 0
+    total_intros = 0
     show_detail = 3  # print first N files verbosely
 
     for i, src in enumerate(files):
-        before, after, digits = process_file(src, output_dir)
+        before, after, digits, got_intro = process_file(src, output_dir, intro_dir)
         total_before += before
         total_after += after
         total_digits += digits
+        total_intros += int(got_intro)
         if i < show_detail:
             print(f"{src.name}: {before} words -> {after} words "
-                  f"({digits} numeral remnants dropped)")
+                  f"({digits} numeral remnants dropped, "
+                  f"intro {'recovered' if got_intro else 'MISSING'})")
 
     print()
     print(f"Total files          : {len(files)}")
     print(f"Words before         : {total_before}")
     print(f"Words after          : {total_after}")
     print(f"Numeral remnants cut : {total_digits}")
+    print(f"Book intros recovered: {total_intros} / {len(files)}")
     print(f"Reduction            : {100*(1 - total_after/total_before):.1f}%" if total_before else "")
 
 

@@ -58,6 +58,16 @@ def build_command(cfg: dict) -> list:
     if cfg.get("temporary_directory"):
         cmd.extend(["--temporary_directory", cfg["temporary_directory"]])
 
+    if cfg.get("single_speaker"):
+        # MFA silently ignores num_jobs > 1 when the corpus has only one
+        # speaker directory (confirmed in the batch2 log: "Number of jobs
+        # was specified as 4, but due to only having 1 speakers, MFA will
+        # only use 1 jobs"), which made every Phase 3 verification batch
+        # run single-threaded regardless of num_jobs. This flag tells MFA
+        # to split utterances across jobs anyway, ignoring speaker grouping
+        # — untested at full scale yet, pilot it on a small subset first.
+        cmd.append("--single_speaker")
+
     return cmd
 
 
