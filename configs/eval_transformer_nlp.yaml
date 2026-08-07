@@ -1,0 +1,13 @@
+# Downstream genre-classification eval for the transformer models
+# (SunuwarBERT-small and SunuwarCLM-small), pooling each model's own
+# hidden states instead of the static word2vec/fastText vectors that
+# src/evaluate_nlp.py handles.
+
+mlm_config_path: configs/mlm.yaml
+clm_config_path: configs/clm.yaml
+
+train_path: data/processed/train.txt
+test_path: data/processed/test.txt
+
+batch_size: 32
+output_path: results/transformer_nlp_eval.json
