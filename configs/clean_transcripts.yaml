@@ -1,2 +1,8 @@
 input_dir: data/processed/audio/pairs
 output_dir: data/processed/audio/mfa_input
+
+# Book-name header line (e.g. "मत्ती.") is spoken aloud by the narrator before
+# the chapter's verses but was previously discarded along with the chapter-
+# number line. It's now captured here instead of thrown away — see
+# segment_from_pauses.py's book-intro handling.
+intro_output_dir: data/processed/audio/mfa_intro

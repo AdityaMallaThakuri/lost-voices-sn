@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}NLP · Lost Voices{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <h1>SunuwarBERT-small</h1>
+  <p class="subtitle">Masked Language Model · Sunuwar (ISO 639-3: <code>suz</code>) · Devanagari script</p>
+  <p class="lede">First publicly reproducible language model for an endangered Kiranti language of Nepal. Type a Sunuwar sentence with a hidden word and watch the model guess it — live, using the actual trained weights, not a scripted demo.</p>
+</section>
+
+<section class="stat-row">
+  <div class="stat-card"><span class="stat-value">{{ "{:,}".format(model_info.params) }}</span><span class="stat-label">Parameters</span></div>
+  <div class="stat-card"><span class="stat-value">{{ model_info.layers }}</span><span class="stat-label">Layers</span></div>
+  <div class="stat-card"><span class="stat-value">{{ model_info.hidden_dim }}</span><span class="stat-label">Hidden dim</span></div>
+  <div class="stat-card"><span class="stat-value">{{ "{:,}".format(model_info.vocab_size) }}</span><span class="stat-label">Vocab pieces</span></div>
+</section>
+
+<section class="card">
+  <div class="card-header">
+    <h2>Model performance</h2>
+    <button id="ppl-btn" class="btn btn-secondary">Compute test-set perplexity</button>
+  </div>
+  <div id="ppl-result" class="ppl-grid hidden">
+    <div class="stat-card"><span class="stat-value" id="ppl-value">–</span><span class="stat-label">Test perplexity</span></div>
+    <div class="stat-card"><span class="stat-value">~8,000</span><span class="stat-label">Random baseline</span></div>
+    <div class="stat-card"><span class="stat-value" id="ppl-factor">–</span><span class="stat-label">Improvement factor</span></div>
+  </div>
+  <p class="hint">Perplexity measures how surprised the model is by unseen Sunuwar text. Lower is better.</p>
+</section>
+
+<section class="card">
+  <h2>Try a preset example</h2>
+  <div class="example-list" id="example-list">
+    {% for ex in demo_sentences %}
+    <button class="example-chip"
+            data-masked="{{ ex.masked }}"
+            data-original="{{ ex.original }}"
+            data-correct="{{ ex.correct }}"
+            data-label="{{ ex.label }}">
+      {{ ex.label }}
+    </button>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card">
+  <h2>Masked word prediction</h2>
+  <p class="hint">Write (or click a preset above) a Sunuwar sentence in Devanagari with <code>[MASK]</code> where you want the model to guess.</p>
+  <div class="input-row">
+    <input type="text" id="sentence-input" placeholder="e.g. मिनु [MASK] आ खिं लशा बाक्‍तक।" autocomplete="off">
+    <button id="predict-btn" class="btn btn-primary">Predict</button>
+  </div>
+  <div id="predict-meta" class="predict-meta hidden"></div>
+  <div id="predict-error" class="error hidden"></div>
+  <div id="predict-bars" class="bars"></div>
+</section>
+
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/nlp.js"></script>
+{% endblock %}

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Lost Voices{% endblock %}</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<header class="navbar">
+  <div class="navbar-inner">
+    <a class="brand" href="/nlp">
+      <svg class="brand-icon" viewBox="0 0 48 48" width="28" height="28" aria-hidden="true">
+        <path d="M4 38 L18 14 L26 26 L32 16 L44 38 Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="34" cy="10" r="3.2" fill="currentColor"/>
+      </svg>
+      <span>Lost Voices</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/nlp" class="{{ 'active' if active == 'nlp' else '' }}">NLP</a>
+      <a href="/tts" class="{{ 'active' if active == 'tts' else '' }}">TTS</a>
+    </nav>
+  </div>
+</header>
+
+<main class="page">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span>Lost Voices — Sunuwar (<code>suz</code>) Language AI Pipeline</span>
+    <span class="footer-links">
+      <a href="/resources">Resources &amp; References</a>
+      <span class="dot">·</span>
+      <span>Data: Sunuwar Bible (suzBl) © 2011 Wycliffe Bible Translators, CC BY-NC-ND 4.0 — non-commercial research use only</span>
+    </span>
+  </div>
+</footer>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

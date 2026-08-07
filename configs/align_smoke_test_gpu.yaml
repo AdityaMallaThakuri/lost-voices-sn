@@ -1,0 +1,17 @@
+mode: train
+
+corpus_dir: smoke_test
+dictionary_path: data/processed/audio/mfa_dict.dict
+output_model_path: models/smoke_test_gpu.zip
+output_textgrid_dir: smoke_test_textgrids
+
+# GPU-lab machine: Xeon W-2223, 4c/8t, 32GB RAM. Testing whether
+# --single_speaker actually engages more than 1 job on this corpus before
+# committing to the full ~14,874-segment run (MFA silently drops to 1 job
+# on a single-speaker corpus otherwise — see src/align.py).
+num_jobs: 6
+clean: true
+single_speaker: true
+
+# Only C: has real free space on this machine (179GB) — no override needed,
+# MFA's default temp dir under Documents/MFA is fine here.

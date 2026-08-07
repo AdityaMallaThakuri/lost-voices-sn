@@ -524,7 +524,7 @@ counts, not epochs (~20x the clips).
 | Week 5d | Align segments with MFA (roadmap Phase 3) | 🔄 Verification complete — all 4 batches, 18 chapters, 810/915 = 88.5%; **full 260-chapter run still todo** (~2.5 days single-threaded, test `--single_speaker` first), run locally via `aligner` conda env, not Colab |
 | Week 5e | QC filtering + build tts_dataset/metadata.csv (roadmap Phase 4–5) | 🔄 Re-run on all 18 verification chapters (batch2 added) — 690/915 pass QC (75.4%), 1.37h dataset, thresholds held fixed and generalised without retuning. Must be re-run again after the full Phase 3 |
 | Week 6 | MMS TTS fine-tuning from mms-tts-**mai** (roadmap Phase 6) | 🔄 Running — prototype fine-tune launched 2026-07-27 on the 0.88h dataset, 9,000 steps / ~3h18m on a Colab T4. Pipeline validated end to end |
-| Week 7–8 | Evaluation (roadmap Phase 7–8) + report + release | 🔲 Todo |
+| Week 7–8 | Evaluation (roadmap Phase 7–8) + report + release | 🔄 Eval data built (2026-08-07) — `results/eval_similarity.csv` (90 pairs) and `results/eval_analogy.txt` (30 quadruples) both finalized, corpus-mined + IDF-weighted, with `*_methodology.md` docs for each. Actually scoring word2vec/fastText/SunuwarBERT-small against these files is still 🔲 Todo |
 
 Update this table as tasks complete. See "TTS roadmap" section above for the detailed
 Week 5–6 plan and why the original Mark-pilot alignment is being redone.

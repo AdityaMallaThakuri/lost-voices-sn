@@ -15,6 +15,9 @@ models/tts_checkpoints/
 *.wv.vectors_vocab.npy
 *.trainables.syn1neg.npy
 
+new_segments/
+
+
 
 # Python
 __pycache__/
@@ -42,8 +45,9 @@ data/processed/audio/
 # CC BY-NC-ND and must not be redistributed. Exclude the whole directory.
 data/processed/tts_dataset/
 
-# Dataset zip staged for upload to Drive — licensed audio + transcripts
-tts_dataset.zip
+# Dataset zip(s) staged for upload to Drive — licensed audio + transcripts.
+# Glob covers size-stamped variants too (e.g. tts_dataset_1.37h.zip).
+tts_dataset*.zip
 
 # Trained TTS checkpoints — model.safetensors exceeds GitHub's 100MB file
 # limit. Keep them in Drive or push to the HF Hub, not here.
@@ -57,3 +61,5 @@ SUZWBTN1DA/
 
 # Local scratch for moving data to Colab/Drive — never meant for git
 _colab_transfer/
+
+sunuwar_resources/

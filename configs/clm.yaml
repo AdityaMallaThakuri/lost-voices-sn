@@ -1,0 +1,37 @@
+# Data
+train_path: data/processed/train.txt
+test_path: data/processed/test.txt
+tokeniser_path: models/sunuwar_spm_8k.model
+
+# Model architecture (Config C from the causal-LM feasibility investigation:
+# ~14.72M params, closest clean match to SunuwarBERT-small's 14.49M)
+num_layers: 6
+hidden_dim: 384
+num_heads: 8
+ffn_dim: 1280
+max_seq_len: 128
+vocab_size: 6764
+dropout: 0.1
+activation: gelu
+
+# Training
+seed: 42
+epochs: 100
+batch_size: 32
+grad_accumulation_steps: 4
+learning_rate: 0.0005
+weight_decay: 0.01
+warmup_ratio: 0.1
+fp16: true
+
+# Early stopping
+early_stopping_patience: 5
+monitor_metric: val_perplexity
+
+# Output
+checkpoint_path: models/sunuwar_clm.pt
+eval_output_path: results/clm_eval.json
+
+# Wandb
+wandb_project: lost-voices-sunuwar
+wandb_run_name: sunuwarCLM-small-v1

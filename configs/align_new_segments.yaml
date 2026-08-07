@@ -1,0 +1,23 @@
+mode: train
+
+corpus_dir: new_segments
+dictionary_path: data/processed/audio/mfa_dict.dict
+output_model_path: models/sunuwar_acoustic_model.zip
+output_textgrid_dir: new_segments_textgrids
+
+# Adjust to (cpu_cores - 2), but watch RAM — MFA/Kaldi can be memory-hungry
+# per job. If the machine has less RAM than cores would suggest, lower this.
+num_jobs: 8
+clean: true
+
+# --single_speaker: untested at full scale — every previous verification
+# batch silently ran on 1 job regardless of num_jobs because MFA drops to
+# 1 job when the corpus has only one speaker directory (see align.py).
+# Pilot this flag on a handful of chapters before trusting it for the full
+# ~15,654-segment run.
+single_speaker: true
+
+# Point this at a drive with plenty of free space — MFA's default temp dir
+# fills up fast at this corpus size (the old machine needed ~a few GB for
+# just the 18-chapter verification sample; the full corpus will need more).
+temporary_directory: D:/mfa_temp

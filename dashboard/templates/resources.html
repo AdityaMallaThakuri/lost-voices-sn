@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Resources · Lost Voices{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <h1>Resources &amp; References</h1>
+  <p class="lede">Every source and paper used to design Lost Voices, organised by capstone deliverable (IN-SPaN 2026). Kept here so anyone can trace the reasoning behind a design decision back to its source.</p>
+</section>
+
+<section class="card our-paper-card {{ 'paper-ready' if our_paper.status == 'ready' else 'paper-pending' }}">
+  <h2>Our paper</h2>
+  {% if our_paper.status == 'ready' %}
+    <p><a href="{{ our_paper.url }}">{{ our_paper.title }}</a></p>
+  {% else %}
+    <p class="hint">{{ our_paper.title }} — {{ our_paper.note }}</p>
+  {% endif %}
+</section>
+
+{% for d in deliverables %}
+<section class="card deliverable">
+  <h2>{{ d.title }}</h2>
+  {% for g in d.groups %}
+  <div class="ref-group">
+    <h3>{{ g.name }}</h3>
+    <ul class="ref-links">
+      {% for link in g.links %}
+      <li><a href="{{ link.url }}" target="_blank" rel="noopener">{{ link.label }}</a></li>
+      {% endfor %}
+    </ul>
+    <p class="use-for"><strong>Use for:</strong> {{ g.use_for }}</p>
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+
+{% endblock %}

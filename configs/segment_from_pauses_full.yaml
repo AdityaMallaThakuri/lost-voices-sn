@@ -1,8 +1,8 @@
 wav_dir: data/processed/audio/wav
 text_dir: data/processed/audio/mfa_input
 intro_text_dir: data/processed/audio/mfa_intro
-output_corpus_dir: data/processed/audio/mfa_corpus_segments
-report_path: data/processed/audio/segmentation_report.csv
+output_corpus_dir: new_segments
+report_path: new_segments/segmentation_report.csv
 
 # Permissive silence detection — deliberately over-detects pauses (including
 # minor mid-sentence breaths); the real sentence boundaries are then picked
