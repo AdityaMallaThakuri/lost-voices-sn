@@ -10,7 +10,7 @@ ffn_dim: 512
 num_encoder_layers: 3
 num_decoder_layers: 3
 max_seq_len: 128
-dropout: 0.1
+dropout: 0.2
 activation: gelu
 
 # Training
@@ -19,10 +19,11 @@ epochs: 40
 batch_size: 32
 grad_accumulation_steps: 4
 learning_rate: 0.0005
-weight_decay: 0.01
+weight_decay: 0.05
 warmup_ratio: 0.1
 fp16: true
 train_split: 0.9
+label_smoothing: 0.1
 
 # Early stopping
 early_stopping_patience: 5

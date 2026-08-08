@@ -260,7 +260,11 @@ def shift_for_teacher_forcing(tgt_ids: torch.Tensor):
 
 def train_one_epoch(model, dataloader, optimiser, scheduler, config, device, scaler):
     model.train()
-    loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+    # Label smoothing applied to the TRAINING loss only (standard NMT practice,
+    # e.g. the original Transformer paper) -- eval's loss_fn below stays
+    # unsmoothed so val_loss/perplexity remain a true, comparable NLL metric
+    # for early stopping and cross-run reporting.
+    loss_fn = nn.CrossEntropyLoss(ignore_index=-100, label_smoothing=config.get("label_smoothing", 0.0))
     fp16 = config.get("fp16", False)
     grad_acc = config["grad_accumulation_steps"]
 
