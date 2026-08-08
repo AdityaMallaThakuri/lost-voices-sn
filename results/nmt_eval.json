@@ -1,0 +1,7 @@
+{
+  "architecture": "SunuwarNMT-small",
+  "total_parameters": 9508362,
+  "joint_vocab_size": 10762,
+  "best_val_loss": 3.9696,
+  "best_epoch": 19
+}
