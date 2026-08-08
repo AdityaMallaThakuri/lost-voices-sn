@@ -24,6 +24,7 @@ import torch
 import yaml
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
+from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -95,7 +96,10 @@ def vectorise_sentences(sentences: list, labels: list, model, tokeniser, pool_fn
     return vectors, kept_labels
 
 
-def run_genre_classification(model, tokeniser, pool_fn, train_path, test_path, batch_size, device) -> float:
+GENRE_NAMES = ["Narrative", "Epistles", "Apocalyptic"]
+
+
+def run_genre_classification(model, tokeniser, pool_fn, train_path, test_path, batch_size, device) -> dict:
     with open(train_path, encoding="utf-8") as fh:
         train_sentences = [l.rstrip("\n") for l in fh if l.strip()]
     train_labels = assign_genre_labels(train_sentences)
@@ -106,10 +110,25 @@ def run_genre_classification(model, tokeniser, pool_fn, train_path, test_path, b
     test_labels = assign_genre_labels(test_sentences)
     X_test, y_test = vectorise_sentences(test_sentences, test_labels, model, tokeniser, pool_fn, batch_size, device)
 
-    clf = LogisticRegression(max_iter=1000, random_state=42)
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
-    return float(f1_score(y_test, y_pred, average="macro"))
+    # The word2vec/fastText run (evaluate_nlp.py) also uses unscaled features
+    # with max_iter=1000 -- that's fine for their ~100-200 dim static vectors,
+    # but this model's 384-dim pooled hidden states didn't converge at that
+    # setting (see the run that produced this fix). Scaling + a higher
+    # iteration cap here only changes how well THIS classifier fits pooled
+    # transformer features; it has no effect on BERT/CLM themselves.
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    clf = LogisticRegression(max_iter=5000, random_state=42)
+    clf.fit(X_train_scaled, y_train)
+    y_pred = clf.predict(X_test_scaled)
+
+    per_class = f1_score(y_test, y_pred, average=None, labels=[0, 1, 2])
+    return {
+        "genre_f1_macro": round(float(f1_score(y_test, y_pred, average="macro")), 4),
+        "genre_f1_per_class": {name: round(float(f1), 4) for name, f1 in zip(GENRE_NAMES, per_class)},
+    }
 
 
 def load_bert(mlm_config_path: str, device):
@@ -154,24 +173,26 @@ def main():
     print("\n=== SunuwarBERT-small (pooling: [CLS] token) ===")
     bert_model, bert_tok = load_bert(cfg["mlm_config_path"], device)
     if bert_model is not None:
-        f1 = run_genre_classification(
+        metrics = run_genre_classification(
             bert_model, bert_tok, pool_bert,
             cfg["train_path"], cfg["test_path"], cfg["batch_size"], device,
         )
-        print(f"  Genre F1 macro: {f1:.4f}")
-        results["sunuwarBERT-small"] = {"pooling": "cls_token", "genre_f1_macro": round(f1, 4)}
+        print(f"  Genre F1 macro: {metrics['genre_f1_macro']:.4f}")
+        print(f"  Genre F1 per class: {metrics['genre_f1_per_class']}")
+        results["sunuwarBERT-small"] = {"pooling": "cls_token", **metrics}
     else:
         results["sunuwarBERT-small"] = {"pooling": "cls_token", "genre_f1_macro": None, "status": "checkpoint_missing"}
 
     print("\n=== SunuwarCLM-small (pooling: last non-pad token) ===")
     clm_model, clm_tok = load_clm(cfg["clm_config_path"], device)
     if clm_model is not None:
-        f1 = run_genre_classification(
+        metrics = run_genre_classification(
             clm_model, clm_tok, pool_clm,
             cfg["train_path"], cfg["test_path"], cfg["batch_size"], device,
         )
-        print(f"  Genre F1 macro: {f1:.4f}")
-        results["sunuwarCLM-small"] = {"pooling": "last_token", "genre_f1_macro": round(f1, 4)}
+        print(f"  Genre F1 macro: {metrics['genre_f1_macro']:.4f}")
+        print(f"  Genre F1 per class: {metrics['genre_f1_per_class']}")
+        results["sunuwarCLM-small"] = {"pooling": "last_token", **metrics}
     else:
         results["sunuwarCLM-small"] = {"pooling": "last_token", "genre_f1_macro": None, "status": "checkpoint_missing"}
 
