@@ -1,0 +1,19 @@
+:root {
+  /* Figma tokens */
+  --color-ink: #1b1f27;
+  --color-paper: #eae6dc;
+  --color-brass: #c99a3e;
+  --color-teal: #3f9c93;
+  --color-signal-red: #8b3a3a;
+
+  /* Fonts (loaded via Google Fonts <link> in index.html) */
+  --font-ui: 'IBM Plex Sans', 'IBM Plex Sans Devanagari', sans-serif;
+  --font-content: 'Tiro Devanagari Hindi', serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-ui);
+}

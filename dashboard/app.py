@@ -13,23 +13,40 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from model_service import MLMService, DEMO_SENTENCES
+from clm_service import CLMService
+from nmt_service import NMTService
 from resources_data import DELIVERABLES, OUR_PAPER
 
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="Lost Voices Dashboard")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 print("Loading SunuwarBERT-small checkpoint...")
 mlm = MLMService()
 print(f"Loaded. {mlm.param_count:,} parameters.")
+
+print("Loading SunuwarCLM-small checkpoint...")
+clm = CLMService()
+print(f"Loaded. {clm.param_count:,} parameters.")
+
+print("Loading sunuwarNMT-small checkpoint...")
+nmt = NMTService()
+print(f"Loaded. {nmt.param_count:,} parameters.")
 
 
 def load_tts_manifest() -> list:
@@ -97,3 +114,31 @@ def api_predict(body: PredictRequest):
 @app.get("/api/perplexity")
 def api_perplexity():
     return mlm.perplexity()
+
+
+class CLMGenerateRequest(BaseModel):
+    prompt: str
+    num_new_tokens: int = 15
+
+
+@app.post("/api/clm/generate")
+def api_clm_generate(body: CLMGenerateRequest):
+    try:
+        continuation = clm.generate(body.prompt, num_new_tokens=body.num_new_tokens)
+        return {"prompt": body.prompt, "continuation": continuation}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class TranslateRequest(BaseModel):
+    text: str
+    direction: str
+
+
+@app.post("/api/translate")
+def api_translate(body: TranslateRequest):
+    try:
+        translation = nmt.translate(body.text, body.direction)
+        return {"text": body.text, "direction": body.direction, "translation": translation}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

@@ -42,11 +42,21 @@ lost-voices-sunuwar/
 │   ├── train_mlm.py           ← SunuwarBERT-small MLM pre-training
 │   ├── train_tts.py           ← MMS TTS fine-tuning 
 │   ├── evaluate_nlp.py        ← NLP evaluation harness 
-│   └── evaluate_tts.py        ← TTS WER + MOS evaluation 
+│   ├── evaluate_tts.py        ← TTS WER + MOS evaluation 
+│   ├── train_nmt.py           ← sunuwarNMT-small training (imports model from nmt_model.py)
+│   ├── nmt_model.py           ← dependency-light NMT model/tokenizer/inference (no wandb/transformers)
+│   ├── demo_nmt.py / translate_interactive.py ← NMT qualitative demo / REPL
+│   └── evaluate_nmt.py        ← full chrF/BLEU evaluation
 ├── models/                    ← saved checkpoints (gitignored if large)
 ├── configs/                   ← YAML config files, one per training script
 ├── notebooks/                 ← exploratory Colab notebooks
-├── results/                   ← evaluation tables, figures, training curves
+├── results/                   ← evaluation tables, figures, training curves, methodology docs
+│   ├── suz_npi_parallel.tsv / suz_npi_sentence_aligned.tsv  ← NMT Phase 1/2 corpora (gitignored, licensed)
+│   ├── induced_suz_npi_lexicon.tsv  ← NMT Phase 3 output
+│   ├── nmt_methodology.md / PAPER_translation.md  ← NMT Phase 1-4 writeup
+├── dashboard/                 ← FastAPI backend + React frontend live demo (see "Dashboard" section)
+│   ├── app.py, model_service.py, clm_service.py, nmt_service.py
+│   └── frontend/               ← Vite + React app
 └── data/provenance.csv
 ```
 
@@ -468,6 +478,148 @@ counts, not epochs (~20x the clips).
 
 ---
 
+## Translation pipeline (Sunuwar↔Nepali NMT, Phases 1–4, closed out 2026-08-08)
+
+Explicitly requested by the user (see "Constraints" above) as an exception to the
+monolingual-only scope. Nepali, not English, was chosen as the pairing language —
+Sunuwar speakers are overwhelmingly Nepali-bilingual, so this is the practically
+useful direction, not a curiosity pick. Full detail in
+`results/nmt_methodology.md` (Phase 4) and `results/PAPER_translation.md`
+(all 4 phases, written up as a paper — flags two bibliography entries as
+not independently verified, see that file's Section 2 note before external
+release).
+
+### Data sources and licensing
+- **Sunuwar**: same `suzBl_usfm.zip`, CC BY-NC-ND 4.0, as everywhere else in
+  this project.
+- **Nepali**: Unlocked Literal Bible (`npiulb`), Door43 World Missions
+  Community, CC BY-SA 4.0 — share-alike/attribution required on any public
+  release.
+- **Combined effect**: every file in this pipeline (verse-aligned,
+  sentence-aligned, induced lexicon) inherits the *stricter* Sunuwar
+  no-redistribution constraint **and** the Nepali share-alike obligation
+  simultaneously. None of these are cleared for public release as-is.
+
+### Phase 1 — verse alignment
+Joined Sunuwar/Nepali NT on each file's own `\id` book-code (not filename —
+the two sources use different numeric prefixes for the same book).
+**7,959/7,959 verses matched, zero one-sided.** Length-ratio sanity filter
+(ratio <0.3 or >3.0) excluded **17/7,959 (0.21%)** as genuine
+translation-tradition sentence-splitting differences, not parsing bugs —
+logged in `results/suz_npi_parallel_excluded.tsv`, not deleted. Final:
+**`results/suz_npi_parallel.tsv`, 7,942 pairs.**
+
+### Phase 2 — sentence alignment
+Verse-level ≠ sentence-level (Sunuwar verses run multi-sentence ~2x as
+often as Nepali, 60% vs 31%). Quote-aware sentence splitter fix (don't
+treat `।`/`?`/`!` as a boundary inside an open quote) shifted the
+alignment-difficulty distribution materially (1-vs-1 trivial cases:
+29.11% → 40.77%) before any alignment algorithm ran. Gale-Church-style DP
+alignment (categories 1:1, 1:2, 2:1, 1:0, 0:1), corpus constants fit
+empirically from clean 1:1 pairs (C=1.0264, S2=9.4698). An IDF-weighted
+lexicon-overlap tiebreaker was implemented and **tested-and-rejected**
+(474 near-ties found, 0 ever flipped by the tiebreaker — reported honestly,
+not hidden). Final: **`results/suz_npi_sentence_aligned.tsv`, 10,412
+pairs**; 1,016 unmatched sentences logged separately, not deleted.
+
+### Phase 3 — induced bilingual lexicon
+eflomal (MCMC word aligner, Colab-only — no local `gcc`/`make`) over the
+10,412 pairs → 38,964 unique word pairs. Frequency threshold ≥3 →
+5,846 pairs (`results/induced_suz_npi_lexicon.tsv`). Validated against the
+SIL lexicon: **measured precision 17.47%**, but a 40-pair manual spot-check
+(by a Nepali/English-literate, non-Sunuwar-fluent reviewer — explicit
+limitation) found **~65% genuinely correct** — a **~4x gap**, traced to
+the SIL lexicon's single-gloss-per-headword sparsity scoring correct
+synonyms as "disagree." **This measurement-gap finding generalizes beyond
+Sunuwar** — any induced lexicon evaluated against a similarly sparse gold
+dictionary should expect a comparable undercount.
+
+### Phase 4 — baseline NMT
+Shared bidirectional encoder-decoder (`src/train_nmt.py`,
+`configs/nmt.yaml`), direction-tagged (`<2npi>`/`<2suz>`), joint vocab via
+**ID-offset merge** of the existing Sunuwar SPM-8k + a new Nepali SPM-4k
+(not a retrained joint SPM — keeps Sunuwar tokenization identical to
+BERT/CLM). Joint vocab came out at **10,762** (not the ~6,000 originally
+estimated) → **9,508,362 actual parameters** (not ~7.1M estimated) — both
+numbers documented, not silently reconciled. Two training runs: baseline
+(val_perplexity 59.23) vs. regularized (label_smoothing=0.1, dropout 0.2,
+weight_decay 0.05 → val_perplexity 52.96, a real ~10.6% improvement). All
+downstream results are from the regularized **Run 2** checkpoint,
+`models/sunuwar_nmt.pt`.
+
+**Honest quantitative ceiling** (full held-out validation, 1,042
+pairs/direction, chrF/BLEU never blended across direction):
+
+| Direction | BLEU | chrF |
+|---|---|---|
+| suz→npi | 2.23 | 21.40 |
+| npi→suz | 3.97 | 24.92 |
+
+Both well below typical usable low-resource NMT baselines (BLEU ~15–20+,
+chrF ~40–50+). Model is **fluent but low-adequacy**: grammatical,
+correct-language output (zero cross-language token leakage — the joint
+vocab/direction-tagging mechanism never misfired) that often doesn't
+track the specific source content, defaulting to generic Biblical-register
+templates instead. **npi→suz outperforms suz→npi on both metrics** — this
+*reverses* the pre-training hypothesis (expected Sunuwar-as-target to be
+harder due to richer morphology); the reason is explicitly flagged as an
+**unconfirmed hypothesis** (source-side comprehension may matter more than
+target-side generation complexity at this scale), not a finding. A
+round-trip back-translation smoke test (suz→npi→suz on 3 sentences,
+2026-08-08, ad hoc) found 0/3 exact matches — consistent with, not
+additional evidence beyond, the single-hop ceiling above, since content
+loss compounds across two hops.
+
+**Root cause, stated plainly**: the pipeline itself (tokenization, joint
+vocab, training, decoding) has no known bug anywhere in it. The limiting
+factor is corpus size (10,412 pairs) — enough for target-language fluency,
+not enough for fine-grained translation adequacy.
+
+**Improvement options discussed but NOT started** (as of 2026-08-08): (1)
+beam search instead of greedy decoding at inference — free, no retraining,
+a quick sanity check on how much of the gap is decoding vs. model; (2)
+fine-tune from a pretrained multilingual seq2seq model (mT5/NLLB) instead
+of training Config A from scratch — the more promising lever, since a
+pretrained model already knows general language structure and would only
+need to learn the Sunuwar-Nepali mapping from the same 10K pairs, not both
+grammars *and* the mapping. Neither has been attempted.
+
+---
+
+## Dashboard (FastAPI backend + React frontend)
+
+Two-part live demo, built 2026-08-08, in `dashboard/`. **Not** part of the
+Colab/reproducibility pipeline above — a separate local demo layer for
+showing the trained checkpoints working live.
+
+- **Backend** (`dashboard/app.py`, FastAPI): three services
+  (`model_service.py`/BERT, `clm_service.py`/CLM, `nmt_service.py`/NMT),
+  each loading its checkpoint once at import time, not per-request. Routes:
+  `POST /api/predict`, `GET /api/perplexity`, `POST /api/clm/generate`,
+  `POST /api/translate`. CORS enabled for `http://localhost:5173`. Run via
+  the `myenv` conda env (`conda activate myenv`, `cd dashboard`, `uvicorn
+  app:app --reload --port 8000`) — this env deliberately has **no**
+  `wandb`/`transformers`, enabled by extracting `src/nmt_model.py` as a
+  dependency-light module (see its docstring) — do not reintroduce a
+  direct `train_nmt.py` import into any inference-path file, that breaks
+  `myenv` again.
+- **Frontend** (`dashboard/frontend/`, Vite + React + `react-router-dom`):
+  design tokens in `src/theme.css` (ink/paper/brass/teal/signal-red colors;
+  IBM Plex Sans/Devanagari, Tiro Devanagari Hindi, IBM Plex Mono fonts).
+  Routes `/` (homepage), `/mlm`, `/clm`, `/translation` are fully live
+  against the real backend; `/tts` is a one-line placeholder only — the
+  TTS checkpoint (`checkpoint-5500`) is still not local (lives on
+  Colab/Drive), so no TTS service/page has been built yet. Run via `cd
+  dashboard/frontend`, `npm run dev`, open `http://localhost:5173` — **both
+  servers must run simultaneously**, the frontend has no inference logic
+  of its own.
+- The homepage's Nepal map (`NepalMap.jsx`) renders a real user-supplied
+  ethnolinguistic map image (`dashboard/frontend/public/image.png`), not a
+  hand-drawn SVG — an earlier SVG attempt was explicitly rejected in favor
+  of a real map picture.
+
+---
+
 ## Evaluation targets
 
 | Model | Metric | Target |
@@ -548,7 +700,7 @@ will silently hide a third of the classification problem.
 ## Constraints
 
 - **Licence:** Raw text and audio cannot be redistributed publicly. Trained models can be released.
-- **No translation task** — this project is monolingual NLP + TTS only. Do not build a translation model unless explicitly asked.
+- **Translation was originally out of scope** ("monolingual NLP + TTS only, do not build a translation model unless explicitly asked") — **the user has since explicitly asked**, and a Sunuwar↔Nepali NMT model was built (Phases 1–4, see "Translation pipeline" section below). This remains a deliberate, explicitly-requested exception, not a silent scope change — do not extend it further (e.g. to English, or to a new language pair) without being asked again.
 - **No OT data in NLP models** unless explicitly asked — NT only for reproducibility with proposal.
 - **No internet calls in scripts** — all downloads happen separately; scripts read from `data/`.
 - **Compute:** Google Colab T4 (15GB VRAM) is the baseline. Scripts must run there. A100 is a bonus.
@@ -576,6 +728,8 @@ will silently hide a third of the classification problem.
 | Week 6 | SunuwarCLM-small — causal LM comparison model (`src/train_clm.py`) | ✅ Done — matched-parameter (14.72M vs. BERT's 14.49M) decoder-only model, Post-LN to match BERT deliberately (controlled comparison). Trained 2026-08-07, early-stopped epoch 15, best val_perplexity 36.88 at epoch 10 (`results/clm_eval.json`) — not directly comparable to BERT's 14.79, see note below |
 | Week 6–7 | Downstream genre-classification eval, all 5 NLP models (`src/evaluate_nlp.py`, `src/evaluate_transformer_nlp.py`) | ✅ Done (2026-08-08) — see "Downstream genre-classification results" section below for the full table and honest caveats. Both transformers beat all embeddings on every class; BERT-vs-CLM is a wash |
 | Week 7–8 | Evaluation (roadmap Phase 7–8) + report + release | 🔄 Eval data built (2026-08-07) — `results/eval_similarity.csv` (90 pairs) and `results/eval_analogy.txt` (30 quadruples) both finalized, corpus-mined + IDF-weighted, with `*_methodology.md` docs for each. Actually scoring word2vec/fastText/SunuwarBERT-small against these files is still 🔲 Todo |
+| Week 8 | Sunuwar↔Nepali NMT, Phases 1–4 (explicit exception to no-translation rule) | ✅ Done (2026-08-08) — see "Translation pipeline" section above. Verse align (7,942 pairs) → sentence align (10,412 pairs) → induced lexicon (eflomal, validated vs. SIL) → baseline NMT (BLEU 2.23–3.97, chrF 21.40–24.92, fluent but low-adequacy, honestly reported). `results/nmt_methodology.md` + `results/PAPER_translation.md`. Improvement options (beam search, pretrained-multilingual fine-tune) discussed, 🔲 not started |
+| Week 8 | Live demo dashboard (FastAPI + React) | ✅ Done (2026-08-08) — see "Dashboard" section above. MLM/CLM/Translation pages fully live against real checkpoints, smoke-tested end-to-end. TTS page still a placeholder, 🔲 blocked on `checkpoint-5500` transfer to local machine |
 
 Update this table as tasks complete. See "TTS roadmap" section above for the detailed
 Week 5–6 plan and why the original Mark-pilot alignment is being redone.

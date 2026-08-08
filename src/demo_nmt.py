@@ -18,7 +18,7 @@ import torch
 import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from train_nmt import JointTokeniser, SunuwarNMT, load_and_split
+from nmt_model import JointTokeniser, SunuwarNMT, load_and_split, greedy_translate, decode_combined_ids
 
 random.seed(42)
 
@@ -54,67 +54,6 @@ def identify_checkpoint_run(config: dict):
         print(f"  {eval_path} reports best_val_loss={best_val_loss} (epoch {best_epoch}) -- "
               f"does not match either previously-discussed run exactly. "
               f"This may be a newer/different run than the two compared so far.")
-
-
-@torch.no_grad()
-def greedy_translate(model, tokeniser, src_ids: list, direction: str, device, max_new_tokens: int = 60):
-    """direction is 'suz2npi' or 'npi2suz' -- only used to pick which native
-    SPM decodes the generated ids back to text."""
-    src_tensor = torch.tensor([src_ids], dtype=torch.long, device=device)
-    src_padding_mask = torch.zeros_like(src_tensor, dtype=torch.bool)  # no padding, single example
-
-    generated = [JointTokeniser.BOS_ID]
-    for _ in range(max_new_tokens):
-        tgt_tensor = torch.tensor([generated], dtype=torch.long, device=device)
-        tgt_padding_mask = torch.zeros_like(tgt_tensor, dtype=torch.bool)
-        logits = model(src_tensor, tgt_tensor, src_padding_mask, tgt_padding_mask)
-        next_id = logits[0, -1].argmax().item()
-        generated.append(next_id)
-        if next_id == JointTokeniser.EOS_ID:
-            break
-
-    content_ids = generated[1:]
-    if content_ids and content_ids[-1] == JointTokeniser.EOS_ID:
-        content_ids = content_ids[:-1]
-
-    return decode_combined_ids(tokeniser, content_ids, direction)
-
-
-def decode_combined_ids(tokeniser: JointTokeniser, combined_ids: list, direction: str) -> str:
-    """Map combined-space ids back to native SPM ids and decode with the
-    correct model for the OUTPUT language of this direction.
-
-    A model (especially early in training, or on a mispredicted step) can
-    emit a combined-space id that belongs to the WRONG language's range for
-    this direction -- e.g. a Sunuwar-range id while generating Nepali output.
-    That must not crash decoding (found via a smoke test with a random-init
-    model before this was handled): any out-of-range id is dropped rather
-    than passed to SentencePiece, which raises IndexError on out-of-range
-    piece ids instead of failing gracefully.
-    """
-    if direction == "suz2npi":
-        sp = tokeniser.npi_sp
-        offset = tokeniser.npi_offset
-        content_count = tokeniser.npi_content_count
-    else:
-        sp = tokeniser.suz_sp
-        offset = tokeniser.suz_offset
-        content_count = tokeniser.suz_content_count
-
-    native_ids = []
-    dropped = 0
-    for cid in combined_ids:
-        if cid < JointTokeniser.NUM_SPECIALS:
-            continue  # skip stray specials (shouldn't normally appear mid-output)
-        native_id = cid - offset + 4  # +4 to undo the "skip native specials 0-3" offset
-        if offset <= cid < offset + content_count:
-            native_ids.append(native_id)
-        else:
-            dropped += 1  # id belongs to the other language's range -- drop, don't crash
-    text = sp.decode(native_ids) if native_ids else "(empty output)"
-    if dropped:
-        text += f"  [{dropped} out-of-range token(s) dropped]"
-    return text
 
 
 def main():

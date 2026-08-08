@@ -65,3 +65,8 @@ _colab_transfer/
 sunuwar_resources/
 
 .env
+
+
+models/checkpoint-5500/
+models/mms-tts-mai/
+models/checkpoint-5500.zip

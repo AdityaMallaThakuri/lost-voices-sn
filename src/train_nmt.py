@@ -45,143 +45,16 @@ import random
 import torch
 import torch.nn as nn
 import torch.utils.data
-import sentencepiece as spm
 import numpy as np
 import wandb
 import yaml
 from transformers import get_linear_schedule_with_warmup
 
-
-# ---------------------------------------------------------------------------
-# Joint tokenizer: ID-offset merge of the two existing SPM models
-# ---------------------------------------------------------------------------
-
-class JointTokeniser:
-    # Combined-space special tokens -- NOT reusing either SPM model's own
-    # special ids (each model's own 0-3 are ignored/skipped entirely).
-    PAD_ID = 0
-    UNK_ID = 1
-    BOS_ID = 2
-    EOS_ID = 3
-    TAG_2NPI_ID = 4  # "translate what follows into Nepali"
-    TAG_2SUZ_ID = 5  # "translate what follows into Sunuwar"
-    NUM_SPECIALS = 6
-
-    def __init__(self, suz_model_path: str, npi_model_path: str, max_seq_len: int):
-        self.suz_sp = spm.SentencePieceProcessor()
-        self.suz_sp.Load(suz_model_path)
-        self.npi_sp = spm.SentencePieceProcessor()
-        self.npi_sp.Load(npi_model_path)
-
-        self.max_seq_len = max_seq_len
-
-        # Each SPM model's ids 0-3 are its OWN pad/unk/bos/eos -- skip those,
-        # content pieces start at id 4 in each model's native space.
-        self.suz_content_count = self.suz_sp.vocab_size() - 4
-        self.npi_content_count = self.npi_sp.vocab_size() - 4
-
-        self.suz_offset = self.NUM_SPECIALS
-        self.npi_offset = self.NUM_SPECIALS + self.suz_content_count
-
-        self.vocab_size = self.NUM_SPECIALS + self.suz_content_count + self.npi_content_count
-
-    def encode_suz(self, text: str) -> list[int]:
-        native_ids = self.suz_sp.encode(text)
-        return [self._map_suz(i) for i in native_ids]
-
-    def encode_npi(self, text: str) -> list[int]:
-        native_ids = self.npi_sp.encode(text)
-        return [self._map_npi(i) for i in native_ids]
-
-    def _map_suz(self, native_id: int) -> int:
-        if native_id < 4:
-            return self.UNK_ID  # one of suz's own specials mid-sequence -> combined UNK
-        return self.suz_offset + (native_id - 4)
-
-    def _map_npi(self, native_id: int) -> int:
-        if native_id < 4:
-            return self.UNK_ID
-        return self.npi_offset + (native_id - 4)
-
-    def build_example(self, src_text: str, tgt_text: str, direction: str) -> tuple[list[int], list[int]]:
-        """direction is 'suz2npi' or 'npi2suz'. Returns (src_ids, tgt_ids),
-        each already truncated to max_seq_len, tgt_ids wrapped in BOS/EOS."""
-        if direction == "suz2npi":
-            tag = self.TAG_2NPI_ID
-            src_ids = [tag] + self.encode_suz(src_text)
-            tgt_ids = [self.BOS_ID] + self.encode_npi(tgt_text) + [self.EOS_ID]
-        elif direction == "npi2suz":
-            tag = self.TAG_2SUZ_ID
-            src_ids = [tag] + self.encode_npi(src_text)
-            tgt_ids = [self.BOS_ID] + self.encode_suz(tgt_text) + [self.EOS_ID]
-        else:
-            raise ValueError(f"unknown direction: {direction}")
-        return src_ids[: self.max_seq_len], tgt_ids[: self.max_seq_len]
-
-
-# ---------------------------------------------------------------------------
-# Model: standard encoder-decoder transformer (nn.Transformer-based),
-# same code style as SunuwarBERT-small / SunuwarCLM-small
-# ---------------------------------------------------------------------------
-
-class SunuwarNMT(nn.Module):
-    def __init__(self, config: dict, vocab_size: int):
-        super().__init__()
-        hidden_dim = config["hidden_dim"]
-        num_heads = config["num_heads"]
-        ffn_dim = config["ffn_dim"]
-        num_encoder_layers = config["num_encoder_layers"]
-        num_decoder_layers = config["num_decoder_layers"]
-        max_seq_len = config["max_seq_len"]
-        dropout = config["dropout"]
-        activation = config["activation"]
-
-        self.embedding = nn.Embedding(vocab_size, hidden_dim, padding_idx=JointTokeniser.PAD_ID)
-        self.pos_embedding = nn.Embedding(max_seq_len, hidden_dim)
-
-        self.transformer = nn.Transformer(
-            d_model=hidden_dim,
-            nhead=num_heads,
-            num_encoder_layers=num_encoder_layers,
-            num_decoder_layers=num_decoder_layers,
-            dim_feedforward=ffn_dim,
-            dropout=dropout,
-            activation=activation,
-            batch_first=True,
-        )
-        self.out_head = nn.Linear(hidden_dim, vocab_size)
-
-        total = sum(p.numel() for p in self.parameters())
-        print(f"SunuwarNMT-small: {total:,} parameters")
-
-    def _embed(self, ids: torch.Tensor) -> torch.Tensor:
-        seq_len = ids.size(1)
-        pos_ids = torch.arange(seq_len, device=ids.device).unsqueeze(0)
-        return self.embedding(ids) + self.pos_embedding(pos_ids)
-
-    def forward(
-        self,
-        src_ids: torch.Tensor,
-        tgt_ids: torch.Tensor,
-        src_padding_mask: torch.Tensor,
-        tgt_padding_mask: torch.Tensor,
-    ) -> torch.Tensor:
-        src_emb = self._embed(src_ids)
-        tgt_emb = self._embed(tgt_ids)
-
-        tgt_len = tgt_ids.size(1)
-        causal_mask = torch.triu(
-            torch.ones(tgt_len, tgt_len, dtype=torch.bool, device=tgt_ids.device), diagonal=1,
-        )
-
-        out = self.transformer(
-            src_emb, tgt_emb,
-            tgt_mask=causal_mask,
-            src_key_padding_mask=src_padding_mask,
-            tgt_key_padding_mask=tgt_padding_mask,
-            memory_key_padding_mask=src_padding_mask,
-        )
-        return self.out_head(out)
+# JointTokeniser/SunuwarNMT moved to src/nmt_model.py (dependency-light,
+# no wandb/transformers) so inference-only callers -- demo_nmt.py,
+# translate_interactive.py, the dashboard services -- don't need to import
+# this training script (and its wandb/transformers dependencies) at all.
+from nmt_model import JointTokeniser, SunuwarNMT, load_and_split
 
 
 # ---------------------------------------------------------------------------
@@ -200,30 +73,6 @@ class SunuwarNMTDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int):
         src_ids, tgt_ids = self.examples[idx]
         return torch.tensor(src_ids, dtype=torch.long), torch.tensor(tgt_ids, dtype=torch.long)
-
-
-def load_and_split(config: dict, tokeniser: JointTokeniser):
-    import csv
-    with open(config["aligned_path"], encoding="utf-8") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        rows = list(reader)
-
-    rng = random.Random(config["seed"])
-    indices = list(range(len(rows)))
-    rng.shuffle(indices)
-    split_point = int(len(indices) * config["train_split"])
-    train_idx = set(indices[:split_point])
-
-    train_examples, val_examples = [], []
-    for i, row in enumerate(rows):
-        suz_text, npi_text = row["suz_sentence"], row["npi_sentence"]
-        ex_s2n = tokeniser.build_example(suz_text, npi_text, "suz2npi")
-        ex_n2s = tokeniser.build_example(npi_text, suz_text, "npi2suz")
-        target = train_examples if i in train_idx else val_examples
-        target.append(ex_s2n)
-        target.append(ex_n2s)
-
-    return train_examples, val_examples
 
 
 def make_dataloader(dataset: SunuwarNMTDataset, batch_size: int, shuffle: bool):

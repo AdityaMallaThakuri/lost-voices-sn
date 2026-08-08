@@ -1,6 +1,7 @@
-# Set checkpoint_dir to whichever checkpoint you want to evaluate — e.g.
-# /content/drive/MyDrive/sunuwar_tts/prototype/checkpoint-5500
-output_dir: /content/drive/MyDrive/sunuwar_tts/prototype
-checkpoint_dir: /content/drive/MyDrive/sunuwar_tts/prototype/checkpoint-5500
+# checkpoint-5500.zip (unlike a normal mid-training Accelerate checkpoint)
+# bundles config.json + tokenizer files alongside model.safetensors, so
+# output_dir and checkpoint_dir are the same local path.
+output_dir: models/checkpoint-5500
+checkpoint_dir: models/checkpoint-5500
 dataset_dir: /content/tts_dataset
 output_path: results/tts_eval.json
