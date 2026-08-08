@@ -120,7 +120,12 @@ def run_genre_classification(model, tokeniser, pool_fn, train_path, test_path, b
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    clf = LogisticRegression(max_iter=5000, random_state=42)
+    # class_weight="balanced" re-weights the loss inversely to class frequency
+    # (Apocalyptic is ~5% of both splits) -- without it, a linear classifier
+    # can satisfy most of its loss by never predicting the rare class at all,
+    # which is indistinguishable from "the embeddings carry no signal for it"
+    # in the raw F1 number. This isolates which explanation is true.
+    clf = LogisticRegression(max_iter=5000, random_state=42, class_weight="balanced")
     clf.fit(X_train_scaled, y_train)
     y_pred = clf.predict(X_test_scaled)
 
