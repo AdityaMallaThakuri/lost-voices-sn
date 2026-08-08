@@ -79,7 +79,10 @@ def assign_genre_labels(sentences: list) -> list:
     return labels
 
 
-def run_genre_classification(model, train_path: str, test_path: str) -> float:
+GENRE_NAMES = ['Narrative', 'Epistles', 'Apocalyptic']
+
+
+def run_genre_classification(model, train_path: str, test_path: str) -> dict:
     with open(train_path, encoding='utf-8') as fh:
         train_sentences = [l.rstrip('\n') for l in fh if l.strip()]
     train_labels = assign_genre_labels(train_sentences)
@@ -90,11 +93,20 @@ def run_genre_classification(model, train_path: str, test_path: str) -> float:
     test_labels = assign_genre_labels(test_sentences)
     X_test, y_test = vectorise_sentences(model, test_sentences, test_labels)
 
-    clf = LogisticRegression(max_iter=1000, random_state=42)
+    # class_weight="balanced" to match src/evaluate_transformer_nlp.py's fix --
+    # Apocalyptic is ~5% of both splits, and an unweighted classifier there
+    # scored it 0.0 F1 until reweighting revealed real (if modest) signal for
+    # it in BERT/CLM. Applying the same setting here keeps the two eval
+    # scripts on equal footing so the combined comparison table is a fair one.
+    clf = LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced')
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
 
-    return float(f1_score(y_test, y_pred, average='macro'))
+    per_class = f1_score(y_test, y_pred, average=None, labels=[0, 1, 2])
+    return {
+        'genre_f1_macro': round(float(f1_score(y_test, y_pred, average='macro')), 4),
+        'genre_f1_per_class': {name: round(float(f1), 4) for name, f1 in zip(GENRE_NAMES, per_class)},
+    }
 
 
 def main() -> None:
@@ -115,11 +127,12 @@ def main() -> None:
         print(f'\n=== {name} ===')
         model   = load_embedding_model(path)
         oov     = compute_oov_rate(model, cfg['test_path'])
-        f1      = run_genre_classification(model, cfg['train_path'], cfg['test_path'])
+        metrics = run_genre_classification(model, cfg['train_path'], cfg['test_path'])
         print(f'  OOV rate:       {oov:.2f}%')
-        print(f'  Genre F1 macro: {f1:.4f}')
-        results[name] = {'oov_rate': round(oov, 4), 'genre_f1_macro': round(f1, 4)}
-        rows.append((name, oov, f1))
+        print(f"  Genre F1 macro: {metrics['genre_f1_macro']:.4f}")
+        print(f"  Genre F1 per class: {metrics['genre_f1_per_class']}")
+        results[name] = {'oov_rate': round(oov, 4), **metrics}
+        rows.append((name, oov, metrics['genre_f1_macro']))
 
     Path(cfg['output_path']).parent.mkdir(parents=True, exist_ok=True)
     with open(cfg['output_path'], 'w', encoding='utf-8') as fh:

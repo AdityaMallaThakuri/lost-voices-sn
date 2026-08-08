@@ -1,14 +1,29 @@
 {
   "word2vec_sg": {
     "oov_rate": 30.903,
-    "genre_f1_macro": 0.2498
+    "genre_f1_macro": 0.2685,
+    "genre_f1_per_class": {
+      "Narrative": 0.4121,
+      "Epistles": 0.307,
+      "Apocalyptic": 0.0864
+    }
   },
   "word2vec_cbow": {
     "oov_rate": 30.903,
-    "genre_f1_macro": 0.2499
+    "genre_f1_macro": 0.2621,
+    "genre_f1_per_class": {
+      "Narrative": 0.3763,
+      "Epistles": 0.3343,
+      "Apocalyptic": 0.0758
+    }
   },
   "fasttext": {
     "oov_rate": 19.9103,
-    "genre_f1_macro": 0.2494
+    "genre_f1_macro": 0.252,
+    "genre_f1_per_class": {
+      "Narrative": 0.376,
+      "Epistles": 0.2902,
+      "Apocalyptic": 0.0899
+    }
   }
 }

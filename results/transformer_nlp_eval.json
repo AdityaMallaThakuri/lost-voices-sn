@@ -1,0 +1,20 @@
+{
+  "sunuwarBERT-small": {
+    "pooling": "cls_token",
+    "genre_f1_macro": 0.2869,
+    "genre_f1_per_class": {
+      "Narrative": 0.4134,
+      "Epistles": 0.3473,
+      "Apocalyptic": 0.1002
+    }
+  },
+  "sunuwarCLM-small": {
+    "pooling": "last_token",
+    "genre_f1_macro": 0.2884,
+    "genre_f1_per_class": {
+      "Narrative": 0.4302,
+      "Epistles": 0.339,
+      "Apocalyptic": 0.0959
+    }
+  }
+}

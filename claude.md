@@ -481,6 +481,55 @@ counts, not epochs (~20x the clips).
 
 ---
 
+## Downstream genre-classification results (measured, 2026-08-08)
+
+Genre-classification F1 (macro), all 5 NLP models, on the same corpus-position
+genre-label heuristic (`assign_genre_labels`: first 60% of a file = Narrative,
+next 35% = Epistles, last 5% = Apocalyptic — a proxy from corpus structure,
+**not real annotated genre metadata**). Static embeddings mean-pool word
+vectors (`src/evaluate_nlp.py`); BERT pools its `[CLS]` token, the causal LM
+(SunuwarCLM-small, built as a matched-parameter comparison model against
+SunuwarBERT-small — see `src/train_clm.py`) pools its last non-padding token
+(`src/evaluate_transformer_nlp.py`). Both scripts' `LogisticRegression` use
+`class_weight="balanced"` — **required**, not optional: with an unweighted
+classifier, the Apocalyptic class (~5% of every split) scored a flat 0.0 F1
+across *all five* models, indistinguishable from "no signal for this class."
+Reweighting revealed real, non-zero signal for Apocalyptic everywhere, so
+this setting isn't cosmetic — an unweighted eval on this label distribution
+will silently hide a third of the classification problem.
+
+| model | genre_f1_macro | Narrative | Epistles | Apocalyptic |
+|---|---|---|---|---|
+| fasttext | 0.2520 | 0.3760 | 0.2902 | 0.0899 |
+| word2vec_cbow | 0.2621 | 0.3763 | 0.3343 | 0.0758 |
+| word2vec_sg | 0.2685 | 0.4121 | 0.3070 | 0.0864 |
+| SunuwarBERT-small | 0.2869 | 0.4134 | 0.3473 | 0.1002 |
+| SunuwarCLM-small | 0.2884 | 0.4302 | 0.3390 | 0.0959 |
+
+**Reading this honestly:**
+- Both transformers beat every static embedding on **every individual genre
+  class**, not just in the aggregate macro number — a modest but consistent
+  edge (~0.018–0.02 macro F1 over the best embedding, word2vec_sg).
+- The word2vec-vs-fastText target above (fastText expected higher) does
+  **not** hold here — fastText is the *weakest* of the three embeddings on
+  this task (0.2520) despite having much better OOV coverage (19.9% vs
+  30.9%). OOV coverage and downstream genre signal are apparently not the
+  same thing on this task.
+- SunuwarBERT-small vs. SunuwarCLM-small is a **wash, not a finding**: BERT
+  edges CLM on Epistles and Apocalyptic, CLM edges BERT on Narrative, and the
+  macro gap (0.2869 vs 0.2884) is well within what a single train/test split
+  would produce from noise alone. Don't read a pretraining-objective
+  conclusion into this without cross-validation.
+- Perplexity is **not** a fair comparison between the two: SunuwarBERT-small
+  scores far lower val perplexity (14.79) than SunuwarCLM-small (36.88), but
+  MLM perplexity (bidirectional context, only 15% of tokens scored) and
+  causal perplexity (left-context-only, every token scored) are on different
+  scales by construction — this gap is expected and doesn't mean BERT is the
+  better language model. The genre-classification table above is the fair,
+  apples-to-apples comparison between the two.
+
+---
+
 ## Code standards
 
 - **Python 3.10+**
@@ -524,6 +573,8 @@ counts, not epochs (~20x the clips).
 | Week 5d | Align segments with MFA (roadmap Phase 3) | 🔄 Verification complete — all 4 batches, 18 chapters, 810/915 = 88.5%; **full 260-chapter run still todo** (~2.5 days single-threaded, test `--single_speaker` first), run locally via `aligner` conda env, not Colab |
 | Week 5e | QC filtering + build tts_dataset/metadata.csv (roadmap Phase 4–5) | 🔄 Re-run on all 18 verification chapters (batch2 added) — 690/915 pass QC (75.4%), 1.37h dataset, thresholds held fixed and generalised without retuning. Must be re-run again after the full Phase 3 |
 | Week 6 | MMS TTS fine-tuning from mms-tts-**mai** (roadmap Phase 6) | 🔄 Running — prototype fine-tune launched 2026-07-27 on the 0.88h dataset, 9,000 steps / ~3h18m on a Colab T4. Pipeline validated end to end |
+| Week 6 | SunuwarCLM-small — causal LM comparison model (`src/train_clm.py`) | ✅ Done — matched-parameter (14.72M vs. BERT's 14.49M) decoder-only model, Post-LN to match BERT deliberately (controlled comparison). Trained 2026-08-07, early-stopped epoch 15, best val_perplexity 36.88 at epoch 10 (`results/clm_eval.json`) — not directly comparable to BERT's 14.79, see note below |
+| Week 6–7 | Downstream genre-classification eval, all 5 NLP models (`src/evaluate_nlp.py`, `src/evaluate_transformer_nlp.py`) | ✅ Done (2026-08-08) — see "Downstream genre-classification results" section below for the full table and honest caveats. Both transformers beat all embeddings on every class; BERT-vs-CLM is a wash |
 | Week 7–8 | Evaluation (roadmap Phase 7–8) + report + release | 🔄 Eval data built (2026-08-07) — `results/eval_similarity.csv` (90 pairs) and `results/eval_analogy.txt` (30 quadruples) both finalized, corpus-mined + IDF-weighted, with `*_methodology.md` docs for each. Actually scoring word2vec/fastText/SunuwarBERT-small against these files is still 🔲 Todo |
 
 Update this table as tasks complete. See "TTS roadmap" section above for the detailed
